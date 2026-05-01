@@ -5,7 +5,7 @@ import { configValidateCommand } from './commands/config-validate.js';
 import { doctorCommand } from './commands/doctor.js';
 import { evalCommand } from './commands/eval.js';
 import { feedbackImportCommand } from './commands/feedback-import.js';
-import { initCommand } from './commands/init.js';
+import { initCommand, type InitOptions } from './commands/init.js';
 import { modelsListCommand } from './commands/models-list.js';
 import { modelsValidateCommand } from './commands/models-validate.js';
 import { remediateCommand, type RemediateOptions } from './commands/remediate.js';
@@ -25,8 +25,9 @@ export function buildProgram(): Command {
   program
     .command('init')
     .description('Initialize Engagement Harness in the current repository')
-    .action(() => {
-      initCommand();
+    .option('-y, --yes', 'non-interactive mode using detected defaults')
+    .action(async (options: InitOptions) => {
+      await initCommand(options);
     });
 
   program

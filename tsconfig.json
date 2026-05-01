@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/core" },
+    { "path": "./packages/providers" },
+    { "path": "./packages/agents" },
+    { "path": "./packages/pipeline" },
+    { "path": "./packages/reports" },
+    { "path": "./packages/eval" },
+    { "path": "./packages/cli" }
+  ]
+}

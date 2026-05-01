@@ -9,13 +9,14 @@
   },
   "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/*\" build",
+    "build": "tsc -b",
+    "build:clean": "tsc -b --clean",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
     "format": "prettier --write \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
     "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
-    "typecheck": "pnpm -r --filter \"./packages/*\" typecheck"
+    "typecheck": "tsc -b"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

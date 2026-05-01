@@ -1,6 +1,7 @@
 node_modules/
 dist/
 *.log
+*.tsbuildinfo
 .engagement-harness/reports/
 .engagement-harness/feedback/
 .DS_Store

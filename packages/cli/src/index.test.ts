@@ -85,8 +85,6 @@ describe('command stubs', () => {
   });
 
   const cases: Array<{ name: string; args: string[]; expected: string }> = [
-    { name: 'init', args: ['init'], expected: 'init not yet implemented' },
-    { name: 'doctor', args: ['doctor'], expected: 'doctor not yet implemented' },
     { name: 'review', args: ['review'], expected: 'review not yet implemented' },
     { name: 'review --ci', args: ['review', '--ci'], expected: 'review not yet implemented' },
     { name: 'report', args: ['report'], expected: 'report not yet implemented' },
@@ -99,11 +97,6 @@ describe('command stubs', () => {
       name: 'report --run',
       args: ['report', '--run', 'abc'],
       expected: 'report not yet implemented',
-    },
-    {
-      name: 'config validate',
-      args: ['config', 'validate'],
-      expected: 'config validate not yet implemented',
     },
     {
       name: 'agents list',

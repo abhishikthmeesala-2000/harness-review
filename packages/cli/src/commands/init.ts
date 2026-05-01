@@ -1,3 +1,291 @@
-export function initCommand(): void {
-  console.log('init not yet implemented');
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import {
+  ConfigLoader,
+  DEFAULT_AGENT_IDS,
+  RepoProfiler,
+  defaultConfig,
+  type AlmPlatform,
+  type Config,
+  type RepoProfile,
+  type SeverityLevel,
+} from '@engagement-harness/core';
+import chalk from 'chalk';
+import { CliError } from '../utils/errors.js';
+
+export interface InitOptions {
+  yes?: boolean;
+  cwd?: string;
+}
+
+export interface InitAnswers {
+  clientName: string;
+  engagement: string;
+  almPlatform: AlmPlatform;
+  enabledAgents: string[];
+  confidenceThreshold: number;
+  severityThreshold: SeverityLevel;
+  ignoredPaths: string[];
+  blockOnPolicy: boolean;
+  postComments: boolean;
+}
+
+const SCAFFOLD_README = {
+  rules: `# Rules
+
+This folder holds client-specific rules that the DomainPolicyAgent consults during review.
+Each rule is a Markdown file with a YAML frontmatter \`pathGlob\` field describing which
+changed files trigger it. Rules are matched against the diff and surfaced in the agent
+context bundle so reviewers can flag policy violations grounded in your engagement's
+domain knowledge.
+`,
+  evals: `# Evals
+
+This folder holds eval cases that measure review quality on representative diffs.
+Each case names a fixture, a base/head ref, expected findings, and an expected policy
+decision. The eval runner replays cases through the full pipeline with a deterministic
+mock provider, and produces precision/recall metrics so you can track review quality
+over time.
+`,
+  examples: `# Examples
+
+This folder holds reference materials for the engagement: example diffs, sample reports,
+or annotated finding outputs. Treat it as documentation that tells consultants what
+"good" looks like in this client's codebase. Files here are read-only context and do
+not affect runtime behavior.
+`,
+};
+
+function deriveAlmPlatform(profile: RepoProfile): AlmPlatform {
+  switch (profile.ciProvider) {
+    case 'github':
+      return 'github';
+    case 'gitlab':
+      return 'gitlab';
+    case 'azure-devops':
+      return 'azure-devops';
+    case 'bitbucket':
+      return 'bitbucket';
+    default:
+      return 'none';
+  }
+}
+
+export function buildConfigFromAnswers(answers: InitAnswers): Config {
+  const base = defaultConfig({ name: answers.clientName, engagement: answers.engagement });
+  return {
+    ...base,
+    review: {
+      ...base.review,
+      confidenceThreshold: answers.confidenceThreshold,
+      severityThreshold: answers.severityThreshold,
+    },
+    agents: { enabled: answers.enabledAgents },
+    models: Object.fromEntries(answers.enabledAgents.map((id) => [id, 'mock'])),
+    context: { ...base.context, ignoredPaths: answers.ignoredPaths },
+    ci: { ...base.ci, blockOnPolicy: answers.blockOnPolicy, postComments: answers.postComments },
+    alm: { platform: answers.almPlatform },
+  };
+}
+
+export function defaultAnswersFromProfile(cwd: string, profile: RepoProfile): InitAnswers {
+  return {
+    clientName: path.basename(path.resolve(cwd)),
+    engagement: 'pilot',
+    almPlatform: deriveAlmPlatform(profile),
+    enabledAgents: [...DEFAULT_AGENT_IDS],
+    confidenceThreshold: 0.8,
+    severityThreshold: 'low',
+    ignoredPaths: profile.suggestedIgnoredPaths,
+    blockOnPolicy: false,
+    postComments: false,
+  };
+}
+
+interface ScaffoldOptions {
+  cwd: string;
+  config: Config;
+}
+
+function scaffoldDirectoryTree({ cwd, config }: ScaffoldOptions): string[] {
+  const root = path.join(cwd, '.engagement-harness');
+  const written: string[] = [];
+
+  mkdirSync(root, { recursive: true });
+
+  const subdirs: Array<{ name: string; readme?: string; gitkeep?: boolean }> = [
+    { name: 'rules', readme: SCAFFOLD_README.rules },
+    { name: 'evals', readme: SCAFFOLD_README.evals },
+    { name: 'examples', readme: SCAFFOLD_README.examples },
+    { name: 'reports', gitkeep: true },
+    { name: 'feedback', gitkeep: true },
+  ];
+  for (const sub of subdirs) {
+    const dir = path.join(root, sub.name);
+    mkdirSync(dir, { recursive: true });
+    if (sub.readme) {
+      const file = path.join(dir, 'README.md');
+      writeFileSync(file, sub.readme, 'utf8');
+      written.push(file);
+    }
+    if (sub.gitkeep) {
+      const file = path.join(dir, '.gitkeep');
+      writeFileSync(file, '', 'utf8');
+      written.push(file);
+    }
+  }
+
+  ConfigLoader.save(cwd, config);
+  written.push(ConfigLoader.resolvePath(cwd));
+
+  return written;
+}
+
+const GITIGNORE_ENTRIES = ['.engagement-harness/reports/', '.engagement-harness/feedback/'];
+
+function ensureGitignoreEntries(cwd: string): void {
+  const file = path.join(cwd, '.gitignore');
+  let body = '';
+  if (existsSync(file)) {
+    body = readFileSync(file, 'utf8');
+  }
+  const lines = body.split('\n').map((l) => l.trim());
+  let next = body;
+  let changed = false;
+  for (const entry of GITIGNORE_ENTRIES) {
+    if (!lines.includes(entry)) {
+      if (next.length > 0 && !next.endsWith('\n')) next += '\n';
+      next += `${entry}\n`;
+      changed = true;
+    }
+  }
+  if (changed) {
+    writeFileSync(file, next, 'utf8');
+  }
+}
+
+interface RunInitInput {
+  cwd: string;
+  yes: boolean;
+  promptAnswers?: (defaults: InitAnswers, profile: RepoProfile) => Promise<InitAnswers>;
+  log?: (msg: string) => void;
+}
+
+export async function runInit(input: RunInitInput): Promise<{ configPath: string }> {
+  const { cwd, yes, log = (msg: string) => console.log(msg) } = input;
+
+  if (ConfigLoader.exists(cwd)) {
+    throw new CliError(
+      `Engagement Harness is already initialized at ${ConfigLoader.resolvePath(cwd)}. Edit it directly or remove it before re-running init.`,
+      1,
+    );
+  }
+
+  const profile = RepoProfiler.detect(cwd);
+  const defaults = defaultAnswersFromProfile(cwd, profile);
+  let answers: InitAnswers = defaults;
+  if (!yes) {
+    if (!input.promptAnswers) {
+      throw new CliError(
+        'Interactive init requires a TTY. Run with --yes for non-interactive mode.',
+        1,
+      );
+    }
+    answers = await input.promptAnswers(defaults, profile);
+  }
+
+  const config = buildConfigFromAnswers(answers);
+  scaffoldDirectoryTree({ cwd, config });
+  ensureGitignoreEntries(cwd);
+
+  log(chalk.green('✓') + ` Initialized Engagement Harness for ${chalk.bold(answers.clientName)}`);
+  log(`  Config: ${path.relative(cwd, ConfigLoader.resolvePath(cwd)) || '.engagement-harness/config.json'}`);
+  log(`  Detected: language=${profile.language ?? 'unknown'}, ci=${profile.ciProvider ?? 'none'}`);
+  log('');
+  log(`Next: run ${chalk.cyan('engagement-harness doctor')} to verify the install.`);
+
+  return { configPath: ConfigLoader.resolvePath(cwd) };
+}
+
+async function promptAnswersInteractive(
+  defaults: InitAnswers,
+  profile: RepoProfile,
+): Promise<InitAnswers> {
+  const { input, select, checkbox, number, confirm, editor } = await import('@inquirer/prompts');
+  const clientName = await input({ message: 'Client name', default: defaults.clientName });
+  const engagement = await input({ message: 'Engagement name', default: defaults.engagement });
+  const almPlatform = (await select({
+    message: 'ALM platform',
+    default: defaults.almPlatform,
+    choices: [
+      { value: 'github', name: 'GitHub' },
+      { value: 'gitlab', name: 'GitLab' },
+      { value: 'azure-devops', name: 'Azure DevOps' },
+      { value: 'bitbucket', name: 'Bitbucket' },
+      { value: 'none', name: 'None' },
+    ],
+  })) as AlmPlatform;
+  const enabledAgents = (await checkbox({
+    message: 'Enabled agents',
+    choices: DEFAULT_AGENT_IDS.map((id) => ({
+      value: id,
+      name: id,
+      checked: defaults.enabledAgents.includes(id),
+    })),
+  })) as string[];
+  const confidenceThreshold = (await number({
+    message: 'Confidence threshold (0..1)',
+    default: defaults.confidenceThreshold,
+    min: 0,
+    max: 1,
+  })) as number;
+  const severityThreshold = (await select({
+    message: 'Severity threshold',
+    default: defaults.severityThreshold,
+    choices: [
+      { value: 'low', name: 'low' },
+      { value: 'medium', name: 'medium' },
+      { value: 'high', name: 'high' },
+      { value: 'critical', name: 'critical' },
+    ],
+  })) as SeverityLevel;
+  const ignoredPathsRaw = await editor({
+    message: 'Ignored paths (one glob per line)',
+    default: defaults.ignoredPaths.join('\n'),
+    waitForUserInput: false,
+  });
+  const ignoredPaths = ignoredPathsRaw
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+  const blockOnPolicy = await confirm({
+    message: 'Block CI on policy decisions?',
+    default: defaults.blockOnPolicy,
+  });
+  const postComments = await confirm({
+    message: 'Post inline comments to PRs?',
+    default: defaults.postComments,
+  });
+  void profile;
+  return {
+    clientName,
+    engagement,
+    almPlatform,
+    enabledAgents,
+    confidenceThreshold,
+    severityThreshold,
+    ignoredPaths,
+    blockOnPolicy,
+    postComments,
+  };
+}
+
+export async function initCommand(options: InitOptions = {}): Promise<void> {
+  const cwd = options.cwd ?? process.cwd();
+  const yes = options.yes === true;
+  await runInit({
+    cwd,
+    yes,
+    promptAnswers: yes ? undefined : promptAnswersInteractive,
+  });
 }
