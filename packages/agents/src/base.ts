@@ -1,0 +1,94 @@
+import {
+  CandidateFindingSchema,
+  type CandidateFinding,
+  type ContextBundle,
+} from '@engagement-harness/core';
+import type { Provider } from '@engagement-harness/providers';
+import chalk from 'chalk';
+
+export abstract class BaseAgent {
+  abstract readonly id: string;
+  abstract readonly dimension: string;
+  abstract readonly description: string;
+
+  /**
+   * Build the prompt sent to the provider. Implementations MUST include the
+   * literal `Dimension: <dimension>` line — MockProvider's deterministic
+   * fixture map keys off it. Returning an empty string means the agent has
+   * decided it has no work to do (e.g. domain-policy with no rule context),
+   * in which case `run()` short-circuits without invoking the provider.
+   */
+  abstract promptTemplate(context: ContextBundle): string;
+
+  /**
+   * Run the agent. Default implementation:
+   *   1. Build the prompt; bail to [] if empty.
+   *   2. Call provider.complete(); on throw, warn and return [].
+   *   3. Parse the response as a JSON array; tolerate prose surrounding the array.
+   *   4. Validate each item against CandidateFindingSchema.
+   *   5. Drop malformed items with a single chalk warning per agent run.
+   *   6. Tag every accepted candidate with sourceAgent + modelProvider.
+   */
+  async run(context: ContextBundle, provider: Provider): Promise<CandidateFinding[]> {
+    const prompt = this.promptTemplate(context);
+    if (!prompt) return [];
+
+    let raw: string;
+    try {
+      const result = await provider.complete(prompt);
+      raw = result.content;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(chalk.yellow(`[agent:${this.id}] provider error: ${msg}`));
+      return [];
+    }
+
+    const parsed = extractJsonArray(raw);
+    if (!parsed) {
+      console.warn(chalk.yellow(`[agent:${this.id}] could not parse JSON array from response`));
+      return [];
+    }
+
+    const accepted: CandidateFinding[] = [];
+    let dropped = 0;
+    for (const item of parsed) {
+      const result = CandidateFindingSchema.safeParse(item);
+      if (!result.success) {
+        dropped++;
+        continue;
+      }
+      accepted.push({
+        ...result.data,
+        sourceAgent: this.id,
+        modelProvider: provider.name,
+      });
+    }
+    if (dropped > 0) {
+      console.warn(
+        chalk.yellow(`[agent:${this.id}] dropped ${dropped} malformed candidate(s) from response`),
+      );
+    }
+    return accepted;
+  }
+}
+
+function extractJsonArray(raw: string): unknown[] | null {
+  const trimmed = raw.trim();
+  // Fast path: response is already a JSON array.
+  try {
+    const direct: unknown = JSON.parse(trimmed);
+    if (Array.isArray(direct)) return direct;
+  } catch {
+    // Fall through to substring extraction.
+  }
+  // Best-effort: find the first [...] block and parse it.
+  const start = trimmed.indexOf('[');
+  const end = trimmed.lastIndexOf(']');
+  if (start === -1 || end === -1 || end < start) return null;
+  try {
+    const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1));
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
