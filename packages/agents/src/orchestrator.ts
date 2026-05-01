@@ -17,17 +17,22 @@ const AGENT_FACTORIES: Record<string, AgentFactory> = {
   testing: () => new TestingAgent(),
 };
 
-// Specialist agents land in phase 7. The verifier is a pipeline component but
-// the canonical agent list places it here. We acknowledge these IDs so a phase-2
-// default config (which enables all of them) doesn't fail the orchestrator.
-const KNOWN_PHASE_LATER_IDS = new Set([
+/**
+ * Agent IDs that are part of the canonical lineup (and thus appear in default
+ * phase-2 configs) but whose implementations land in phase 7. The orchestrator
+ * silently skips these — a warning would just be noise on every Phase 4/5/6
+ * run. Anything NOT in this set and not registered as a factory is treated as
+ * an unknown ID and gets a chalk warning naming the specific ID.
+ */
+export const PHASE_LATER_AGENT_IDS: readonly string[] = [
   'data-architecture',
   'sre-observability',
   'design-principles',
   'pr-intent-gap',
   'remediation',
-  'verifier',
-]);
+];
+
+const PHASE_LATER_SET = new Set<string>(PHASE_LATER_AGENT_IDS);
 
 export interface OrchestratorOptions {
   /** Override the default phase-4 agent factories. Used by tests. */
@@ -51,7 +56,7 @@ export class AgentOrchestrator {
         runnable.push(factory());
         continue;
       }
-      if (KNOWN_PHASE_LATER_IDS.has(id)) {
+      if (PHASE_LATER_SET.has(id)) {
         // Quiet skip — these are scheduled for a later phase.
         continue;
       }
