@@ -29,9 +29,7 @@ describe('runDoctor', () => {
   it('reports failure when config is missing', () => {
     const report = runDoctor({ cwd: dir, log: noopLog });
     expect(report.ok).toBe(false);
-    expect(report.checks.some((c) => c.status === 'fail' && c.label.includes('config'))).toBe(
-      true,
-    );
+    expect(report.checks.some((c) => c.status === 'fail' && c.label.includes('config'))).toBe(true);
   });
 
   it('reports failure when config is invalid', () => {

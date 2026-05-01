@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultConfig } from '../schemas/config.js';
-import {
-  ConfigInvalidError,
-  ConfigLoader,
-  ConfigNotFoundError,
-} from './loader.js';
+import { ConfigInvalidError, ConfigLoader, ConfigNotFoundError } from './loader.js';
 
 let dir: string;
 

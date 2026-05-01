@@ -21,7 +21,10 @@ export interface ZodIssueSummary {
 export class ConfigInvalidError extends Error {
   override readonly name = 'ConfigInvalidError';
   readonly issues: ZodIssueSummary[];
-  constructor(public readonly configPath: string, issues: ZodIssueSummary[]) {
+  constructor(
+    public readonly configPath: string,
+    issues: ZodIssueSummary[],
+  ) {
     super(
       `Engagement Harness config at ${configPath} is invalid:\n${issues
         .map((i) => `  - ${i.path || '(root)'}: ${i.message}`)

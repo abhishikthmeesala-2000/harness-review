@@ -1,8 +1,4 @@
-import {
-  ConfigInvalidError,
-  ConfigLoader,
-  ConfigNotFoundError,
-} from '@engagement-harness/core';
+import { ConfigInvalidError, ConfigLoader, ConfigNotFoundError } from '@engagement-harness/core';
 import chalk from 'chalk';
 import { CliError } from '../utils/errors.js';
 

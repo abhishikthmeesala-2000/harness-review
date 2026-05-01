@@ -85,8 +85,7 @@ export function buildProgram(): Command {
     });
 
   const ci = program.command('ci').description('CI integration utilities');
-  ci
-    .command('templates')
+  ci.command('templates')
     .description('Generate CI workflow templates')
     .option('--platform <name>', 'CI platform: github | gitlab | azure-devops | bitbucket')
     .action((options: CiTemplatesOptions) => {

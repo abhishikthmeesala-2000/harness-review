@@ -22,14 +22,20 @@ interface CheckResult {
 
 function formatCheck(c: CheckResult): string {
   const icon =
-    c.status === 'pass' ? chalk.green('✓') : c.status === 'fail' ? chalk.red('✗') : chalk.yellow('!');
+    c.status === 'pass'
+      ? chalk.green('✓')
+      : c.status === 'fail'
+        ? chalk.red('✗')
+        : chalk.yellow('!');
   const detail = c.detail ? chalk.dim(`  ${c.detail}`) : '';
   return `${icon} ${c.label}${detail ? '\n' + detail : ''}`;
 }
 
 function checkGitAvailable(): CheckResult {
   try {
-    const out = execSync('git --version', { stdio: ['ignore', 'pipe', 'pipe'] }).toString().trim();
+    const out = execSync('git --version', { stdio: ['ignore', 'pipe', 'pipe'] })
+      .toString()
+      .trim();
     return { status: 'pass', label: 'git is available', detail: out };
   } catch {
     return {

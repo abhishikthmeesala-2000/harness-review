@@ -53,8 +53,8 @@ describe('ConfigSchema', () => {
     });
     expect(result.success).toBe(false);
     if (!result.success) {
-      const msg = result.error.issues.find((i) =>
-        i.path.join('.') === 'review.confidenceThreshold',
+      const msg = result.error.issues.find(
+        (i) => i.path.join('.') === 'review.confidenceThreshold',
       );
       expect(msg?.message).toContain('between 0 and 1');
     }

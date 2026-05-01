@@ -199,7 +199,9 @@ export async function runInit(input: RunInitInput): Promise<{ configPath: string
   ensureGitignoreEntries(cwd);
 
   log(chalk.green('✓') + ` Initialized Engagement Harness for ${chalk.bold(answers.clientName)}`);
-  log(`  Config: ${path.relative(cwd, ConfigLoader.resolvePath(cwd)) || '.engagement-harness/config.json'}`);
+  log(
+    `  Config: ${path.relative(cwd, ConfigLoader.resolvePath(cwd)) || '.engagement-harness/config.json'}`,
+  );
   log(`  Detected: language=${profile.language ?? 'unknown'}, ci=${profile.ciProvider ?? 'none'}`);
   log('');
   log(`Next: run ${chalk.cyan('engagement-harness doctor')} to verify the install.`);

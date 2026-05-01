@@ -15,7 +15,17 @@ export type Language =
   | 'swift'
   | null;
 
-export type PackageManager = 'pnpm' | 'npm' | 'yarn' | 'pip' | 'poetry' | 'go' | 'cargo' | 'maven' | 'gradle' | null;
+export type PackageManager =
+  | 'pnpm'
+  | 'npm'
+  | 'yarn'
+  | 'pip'
+  | 'poetry'
+  | 'go'
+  | 'cargo'
+  | 'maven'
+  | 'gradle'
+  | null;
 
 export type CiProvider = 'github' | 'gitlab' | 'azure-devops' | 'bitbucket' | null;
 

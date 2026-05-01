@@ -4,12 +4,7 @@ import path from 'node:path';
 import { ConfigLoader } from '@engagement-harness/core';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { CliError } from '../utils/errors.js';
-import {
-  buildConfigFromAnswers,
-  defaultAnswersFromProfile,
-  initCommand,
-  runInit,
-} from './init.js';
+import { buildConfigFromAnswers, defaultAnswersFromProfile, initCommand, runInit } from './init.js';
 
 let dir: string;
 const noopLog = (): void => {};
