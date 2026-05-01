@@ -1,7 +1,7 @@
 import { ProviderRegistry } from '@engagement-harness/providers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentOrchestrator } from './orchestrator.js';
+import { AgentOrchestrator, PHASE_LATER_AGENT_IDS } from './orchestrator.js';
 import { makeBundle, makeConfig, makeRuleEntry } from './test-helpers.js';
 
 afterEach(() => {
@@ -24,26 +24,45 @@ describe('AgentOrchestrator.run', () => {
     expect(dimensions.has('domain-policy')).toBe(true);
   });
 
-  it('quietly skips known phase-later agents (data-architecture, etc.)', async () => {
+  it('exposes the phase-later agent IDs as a stable, exported list', () => {
+    expect([...PHASE_LATER_AGENT_IDS].sort()).toEqual(
+      [
+        'data-architecture',
+        'design-principles',
+        'pr-intent-gap',
+        'remediation',
+        'sre-observability',
+      ].sort(),
+    );
+  });
+
+  it('silently skips every known phase-later agent ID and still runs phase-4 agents', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const orchestrator = new AgentOrchestrator();
-    const bundle = makeBundle();
     const config = makeConfig({
-      agents: { enabled: ['reviewer', 'data-architecture', 'sre-observability'] },
+      agents: { enabled: ['reviewer', ...PHASE_LATER_AGENT_IDS] },
     });
-    await orchestrator.run(bundle, config);
-    // No warning should fire for the known later-phase ids.
+    const candidates = await orchestrator.run(makeBundle(), config);
     expect(warnSpy).not.toHaveBeenCalled();
+    // Reviewer still ran — the silent skip didn't short-circuit the orchestrator.
+    expect(candidates.some((c) => c.dimension === 'correctness')).toBe(true);
     warnSpy.mockRestore();
   });
 
-  it('warns and skips unknown agent IDs without failing', async () => {
+  it('warns once per unknown agent ID, names it in the message, and continues running known agents', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const orchestrator = new AgentOrchestrator();
-    const config = makeConfig({ agents: { enabled: ['reviewer', 'totally-made-up'] } });
+    const config = makeConfig({
+      agents: { enabled: ['reviewer', 'totally-made-up', 'verifier'] },
+    });
     const candidates = await orchestrator.run(makeBundle(), config);
-    expect(candidates.length).toBeGreaterThanOrEqual(1);
-    expect(warnSpy).toHaveBeenCalledOnce();
+    // Reviewer ran despite the two bogus IDs.
+    expect(candidates.some((c) => c.dimension === 'correctness')).toBe(true);
+    // Two warnings — one per unknown ID — and each names the offending ID.
+    expect(warnSpy).toHaveBeenCalledTimes(2);
+    const messages = warnSpy.mock.calls.map((call) => String(call[0]));
+    expect(messages.some((m) => m.includes('totally-made-up'))).toBe(true);
+    expect(messages.some((m) => m.includes('verifier'))).toBe(true);
     warnSpy.mockRestore();
   });
 
