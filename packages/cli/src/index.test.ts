@@ -30,6 +30,13 @@ async function invoke(args: string[]): Promise<InvocationResult> {
   } catch (err) {
     if (err && typeof err === 'object' && 'exitCode' in err) {
       exitCode = Number((err as { exitCode: unknown }).exitCode) || 1;
+    } else if (
+      err instanceof Error &&
+      err.message.startsWith('process.exit unexpectedly called')
+    ) {
+      // vitest intercepts process.exit — extract the code from the message
+      const match = err.message.match(/with "(\d+)"/);
+      exitCode = match ? Number(match[1]) : 0;
     } else {
       throw err;
     }
@@ -85,19 +92,6 @@ describe('command stubs', () => {
   });
 
   const cases: Array<{ name: string; args: string[]; expected: string }> = [
-    { name: 'review', args: ['review'], expected: 'review not yet implemented' },
-    { name: 'review --ci', args: ['review', '--ci'], expected: 'review not yet implemented' },
-    { name: 'report', args: ['report'], expected: 'report not yet implemented' },
-    {
-      name: 'report --latest',
-      args: ['report', '--latest'],
-      expected: 'report not yet implemented',
-    },
-    {
-      name: 'report --run',
-      args: ['report', '--run', 'abc'],
-      expected: 'report not yet implemented',
-    },
     {
       name: 'agents list',
       args: ['agents', 'list'],

@@ -1,0 +1,21 @@
+{
+  "client": {
+    "name": "Sample Client",
+    "engagement": "sample-engagement"
+  },
+  "agents": {
+    "enabled": ["security", "reviewer", "testing"]
+  },
+  "providers": {
+    "mock": {}
+  },
+  "ci": {
+    "blockOnPolicy": false,
+    "postComments": false,
+    "artifactsOnly": true
+  },
+  "reports": {
+    "formats": ["json", "markdown", "html"],
+    "outputDir": ".engagement-harness/reports"
+  }
+}

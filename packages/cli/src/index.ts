@@ -9,7 +9,11 @@ import { initCommand, type InitOptions } from './commands/init.js';
 import { modelsListCommand } from './commands/models-list.js';
 import { modelsValidateCommand } from './commands/models-validate.js';
 import { remediateCommand, type RemediateOptions } from './commands/remediate.js';
-import { reportCommand, type ReportOptions } from './commands/report.js';
+import {
+  reportLatestCommand,
+  reportListCommand,
+  reportRunCommand,
+} from './commands/report.js';
 import { reviewCommand, type ReviewOptions } from './commands/review.js';
 
 const VERSION = '0.1.0';
@@ -41,17 +45,30 @@ export function buildProgram(): Command {
     .command('review')
     .description('Run a pull request review')
     .option('--ci', 'run in CI (headless) mode')
-    .action((options: ReviewOptions) => {
-      reviewCommand(options);
+    .option('--base <ref>', 'base git ref for diff (overrides auto-detect)')
+    .option('--head <ref>', 'head git ref for diff (overrides auto-detect)')
+    .action(async (options: ReviewOptions) => {
+      await reviewCommand(options);
     });
 
-  program
-    .command('report')
-    .description('Display a previously generated report')
-    .option('--latest', 'show the most recent report')
-    .option('--run <id>', 'show the report for a specific run id')
-    .action((options: ReportOptions) => {
-      reportCommand(options);
+  const report = program.command('report').description('Report inspection utilities');
+  report
+    .command('latest')
+    .description('Print the most recent report to stdout')
+    .action(() => {
+      reportLatestCommand();
+    });
+  report
+    .command('run <id>')
+    .description('Print a specific run report to stdout')
+    .action((id: string) => {
+      reportRunCommand(id);
+    });
+  report
+    .command('list')
+    .description('List all run IDs with timestamps and decisions')
+    .action(() => {
+      reportListCommand();
     });
 
   const config = program.command('config').description('Configuration utilities');
