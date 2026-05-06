@@ -1,0 +1,6 @@
+{
+  "id": "false-positive-trap",
+  "description": "Safe CRUD service update — no issues expected, zero false positives allowed.",
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}

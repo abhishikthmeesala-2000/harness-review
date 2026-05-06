@@ -6,3 +6,4 @@ dist/
 .engagement-harness/feedback/
 .DS_Store
 coverage/
+examples/eval-report-*.json

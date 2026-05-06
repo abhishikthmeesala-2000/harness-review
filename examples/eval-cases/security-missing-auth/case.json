@@ -1,0 +1,8 @@
+{
+  "id": "security-missing-auth",
+  "description": "Admin route added without authorization middleware — security agent should flag it.",
+  "expectedFindings": [
+    { "dimension": "security" }
+  ],
+  "expectedDecision": "needs_manual_review"
+}

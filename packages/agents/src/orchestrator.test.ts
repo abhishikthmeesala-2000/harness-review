@@ -1,7 +1,7 @@
 import { ProviderRegistry } from '@engagement-harness/providers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentOrchestrator, PHASE_LATER_AGENT_IDS } from './orchestrator.js';
+import { AgentOrchestrator, NON_FINDING_AGENT_IDS, PHASE_LATER_AGENT_IDS } from './orchestrator.js';
 import { makeBundle, makeConfig, makeRuleEntry } from './test-helpers.js';
 
 afterEach(() => {
@@ -24,23 +24,15 @@ describe('AgentOrchestrator.run', () => {
     expect(dimensions.has('domain-policy')).toBe(true);
   });
 
-  it('exposes the phase-later agent IDs as a stable, exported list', () => {
-    expect([...PHASE_LATER_AGENT_IDS].sort()).toEqual(
-      [
-        'data-architecture',
-        'design-principles',
-        'pr-intent-gap',
-        'remediation',
-        'sre-observability',
-      ].sort(),
-    );
+  it('PHASE_LATER_AGENT_IDS is now empty — all phase-7 agents are implemented', () => {
+    expect([...PHASE_LATER_AGENT_IDS]).toEqual([]);
   });
 
-  it('silently skips every known phase-later agent ID and still runs phase-4 agents', async () => {
+  it('silently skips non-finding agents without warning', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const orchestrator = new AgentOrchestrator();
     const config = makeConfig({
-      agents: { enabled: ['reviewer', ...PHASE_LATER_AGENT_IDS] },
+      agents: { enabled: ['reviewer', ...NON_FINDING_AGENT_IDS] },
     });
     const candidates = await orchestrator.run(makeBundle(), config);
     expect(warnSpy).not.toHaveBeenCalled();
@@ -89,10 +81,20 @@ describe('AgentOrchestrator.run', () => {
     warnSpy.mockRestore();
   });
 
-  it('listAgents reports id, dimension, description for each phase-4 agent', () => {
+  it('listAgents reports id, dimension, description for all 9 agents', () => {
     const list = new AgentOrchestrator().listAgents();
     const ids = list.map((a) => a.id).sort();
-    expect(ids).toEqual(['domain-policy', 'reviewer', 'security', 'testing']);
+    expect(ids).toEqual([
+      'data-architecture',
+      'design-principles',
+      'domain-policy',
+      'pr-intent-gap',
+      'remediation',
+      'reviewer',
+      'security',
+      'sre-observability',
+      'testing',
+    ]);
     for (const a of list) {
       expect(a.dimension).toBeTruthy();
       expect(a.description).toBeTruthy();

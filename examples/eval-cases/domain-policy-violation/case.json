@@ -1,0 +1,14 @@
+{
+  "id": "domain-policy-violation",
+  "description": "Payment handler added without idempotency key — domain-policy agent should flag it.",
+  "expectedFindings": [
+    { "dimension": "domain-policy" }
+  ],
+  "expectedDecision": "needs_manual_review",
+  "contextRules": [
+    {
+      "path": "rules/payments.md",
+      "content": "All payment handlers must be idempotent. Use idempotency keys for payment operations to prevent double-charging. Every payment route handler must read the Idempotency-Key header."
+    }
+  ]
+}

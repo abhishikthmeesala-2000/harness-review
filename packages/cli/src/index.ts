@@ -112,24 +112,24 @@ export function buildProgram(): Command {
   program
     .command('eval')
     .description('Run the eval suite against fixture cases')
-    .action(() => {
-      evalCommand();
+    .action(async () => {
+      await evalCommand();
     });
 
   const feedback = program.command('feedback').description('Feedback ingestion utilities');
   feedback
     .command('import <file>')
     .description('Import a feedback JSON file')
-    .action((file: string) => {
-      feedbackImportCommand(file);
+    .action(async (file: string) => {
+      await feedbackImportCommand(file);
     });
 
   program
     .command('remediate')
     .description('Generate a remediation plan for a finding')
     .option('--finding <id>', 'finding id (e.g. EH-0001)')
-    .action((options: RemediateOptions) => {
-      remediateCommand(options);
+    .action(async (options: RemediateOptions) => {
+      await remediateCommand(options);
     });
 
   return program;
