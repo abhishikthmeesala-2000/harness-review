@@ -122,6 +122,123 @@ const DEFAULT_FIXTURES: Record<string, string> = {
       remediationReadiness: 'needs-context',
     },
   ]),
+  // Data Architecture agent.
+  'dimension: data': JSON.stringify([
+    {
+      id: 'EH-MOCK-DATA-1',
+      title: 'Schema migration missing rollback',
+      category: 'data',
+      dimension: 'data',
+      severity: 'high',
+      file: 'db/migrations/001_add_payments.sql',
+      lineStart: 1,
+      lineEnd: 10,
+      evidence: [
+        {
+          type: 'diff',
+          content: 'ALTER TABLE payments ADD COLUMN amount_cents INTEGER NOT NULL;',
+        },
+      ],
+      whyItMatters:
+        'Non-nullable column with no default blocks existing rows during migration.',
+      suggestedFix:
+        'Add a DEFAULT or run a two-step migration (add nullable, backfill, then add NOT NULL constraint).',
+      clientRuleReferences: [],
+      falsePositiveRisk: 'low',
+      sourceAgent: 'data-architecture',
+      modelProvider: 'mock',
+      remediationReadiness: 'ready',
+    },
+  ]),
+  // SRE Observability agent.
+  'dimension: observability': JSON.stringify([
+    {
+      id: 'EH-MOCK-OBS-1',
+      title: 'Error swallowed without structured log',
+      category: 'observability',
+      dimension: 'observability',
+      severity: 'medium',
+      file: 'src/services/payment-processor.ts',
+      lineStart: 45,
+      lineEnd: 50,
+      evidence: [{ type: 'diff', content: 'catch (err) { /* silent */ }' }],
+      whyItMatters:
+        'Silent catch prevents observability tooling from detecting failures in production.',
+      suggestedFix:
+        'Replace with logger.error({ err }, "payment processing failed") and re-throw or handle explicitly.',
+      clientRuleReferences: [],
+      falsePositiveRisk: 'low',
+      sourceAgent: 'sre-observability',
+      modelProvider: 'mock',
+      remediationReadiness: 'ready',
+    },
+  ]),
+  // Design Principles agent.
+  'dimension: design': JSON.stringify([
+    {
+      id: 'EH-MOCK-DES-1',
+      title: 'God function violates single responsibility',
+      category: 'design',
+      dimension: 'design',
+      severity: 'medium',
+      file: 'src/services/order-service.ts',
+      lineStart: 12,
+      lineEnd: 80,
+      evidence: [
+        {
+          type: 'diff',
+          content: 'export async function processOrder(order: Order) {',
+        },
+      ],
+      whyItMatters:
+        'A single function handles validation, payment, inventory, and notification — changes in one path risk unrelated paths.',
+      suggestedFix:
+        'Decompose into processOrderValidation(), chargeOrder(), reserveInventory(), notifyCustomer().',
+      clientRuleReferences: [],
+      falsePositiveRisk: 'medium',
+      sourceAgent: 'design-principles',
+      modelProvider: 'mock',
+      remediationReadiness: 'needs-context',
+    },
+  ]),
+  // PR Intent Gap agent.
+  'dimension: intent-gap': JSON.stringify([
+    {
+      id: 'EH-MOCK-INT-1',
+      title: 'PR claims "read-only refactor" but writes to DB',
+      category: 'intent-gap',
+      dimension: 'intent-gap',
+      severity: 'high',
+      file: 'src/repositories/user-repo.ts',
+      lineStart: 33,
+      lineEnd: 40,
+      evidence: [
+        {
+          type: 'diff',
+          content: 'await db.query("UPDATE users SET last_seen = NOW()")',
+        },
+      ],
+      whyItMatters:
+        'The PR description says no writes are introduced, but a side-effecting UPDATE was added.',
+      suggestedFix:
+        'Either update the PR description to declare the write, or remove it if unintentional.',
+      clientRuleReferences: [],
+      falsePositiveRisk: 'low',
+      sourceAgent: 'pr-intent-gap',
+      modelProvider: 'mock',
+      remediationReadiness: 'ready',
+    },
+  ]),
+  // Remediation agent — returns JSON object (not array); remediate() extracts via {...} regex.
+  'dimension: remediation': JSON.stringify({
+    findingId: 'EH-MOCK-REM-1',
+    steps: [
+      'Add requireAdmin() middleware before the route handler.',
+      'Write an integration test that sends an unauthenticated POST /admin/delete and asserts HTTP 401.',
+      'Deploy behind a feature flag and verify in staging before enabling in production.',
+    ],
+    estimatedEffort: 'low',
+  }),
 };
 
 /**

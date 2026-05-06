@@ -1,0 +1,6 @@
+{
+  "id": "clean-pr",
+  "description": "Simple string formatting utility — no issues expected, zero false positives allowed.",
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}

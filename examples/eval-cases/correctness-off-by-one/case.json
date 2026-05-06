@@ -1,0 +1,7 @@
+{
+  "id": "correctness-off-by-one",
+  "description": "Off-by-one loop boundary — reviewer agent should flag `i <= items.length`.",
+  "expectedFindings": [
+    { "dimension": "correctness" }
+  ]
+}

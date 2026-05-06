@@ -1,0 +1,7 @@
+{
+  "id": "testing-no-coverage",
+  "description": "New public function added without any tests — testing agent should flag missing coverage.",
+  "expectedFindings": [
+    { "dimension": "testing" }
+  ]
+}

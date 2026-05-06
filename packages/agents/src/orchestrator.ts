@@ -2,9 +2,14 @@ import type { CandidateFinding, Config, ContextBundle } from '@engagement-harnes
 import chalk from 'chalk';
 
 import type { BaseAgent } from './base.js';
+import { DataArchitectureAgent } from './data-architecture.js';
+import { DesignPrinciplesAgent } from './design-principles.js';
 import { DomainPolicyAgent } from './domain-policy.js';
+import { PRIntentGapAgent } from './pr-intent-gap.js';
+import { RemediationAgent } from './remediation.js';
 import { ReviewerAgent } from './reviewer.js';
 import { SecurityAgent } from './security.js';
+import { SREObservabilityAgent } from './sre-observability.js';
 import { TestingAgent } from './testing.js';
 import { ModelRouter } from './router.js';
 
@@ -15,27 +20,23 @@ const AGENT_FACTORIES: Record<string, AgentFactory> = {
   security: () => new SecurityAgent(),
   'domain-policy': () => new DomainPolicyAgent(),
   testing: () => new TestingAgent(),
+  'data-architecture': () => new DataArchitectureAgent(),
+  'sre-observability': () => new SREObservabilityAgent(),
+  'design-principles': () => new DesignPrinciplesAgent(),
+  'pr-intent-gap': () => new PRIntentGapAgent(),
+  remediation: () => new RemediationAgent(),
 };
 
-/**
- * Agent IDs that are part of the canonical lineup (and thus appear in default
- * phase-2 configs) but whose implementations land in phase 7. The orchestrator
- * silently skips these — a warning would just be noise on every Phase 4/5/6
- * run. Anything NOT in this set and not registered as a factory is treated as
- * an unknown ID and gets a chalk warning naming the specific ID.
- */
-export const PHASE_LATER_AGENT_IDS: readonly string[] = [
-  'data-architecture',
-  'sre-observability',
-  'design-principles',
-  'pr-intent-gap',
-  'remediation',
-];
+/** All phase-later IDs have landed in phase 7 — nothing left to defer. */
+export const PHASE_LATER_AGENT_IDS: readonly string[] = [];
 
 const PHASE_LATER_SET = new Set<string>(PHASE_LATER_AGENT_IDS);
 
+/** Agent IDs that register in factories but produce no findings — skip in run(). */
+export const NON_FINDING_AGENT_IDS = new Set<string>(['remediation']);
+
 export interface OrchestratorOptions {
-  /** Override the default phase-4 agent factories. Used by tests. */
+  /** Override the default agent factories. Used by tests. */
   factories?: Record<string, AgentFactory>;
 }
 
@@ -53,11 +54,11 @@ export class AgentOrchestrator {
     for (const id of enabled) {
       const factory = this.factories[id];
       if (factory) {
+        if (NON_FINDING_AGENT_IDS.has(id)) continue; // quiet skip — not a finding producer
         runnable.push(factory());
         continue;
       }
       if (PHASE_LATER_SET.has(id)) {
-        // Quiet skip — these are scheduled for a later phase.
         continue;
       }
       console.warn(chalk.yellow(`[orchestrator] unknown agent "${id}"; skipping`));
@@ -84,7 +85,7 @@ export class AgentOrchestrator {
     return aggregated;
   }
 
-  /** Inspect available agents — useful for `agents list` (phase 7). */
+  /** Inspect available agents — useful for `agents list`. */
   listAgents(): Array<{ id: string; dimension: string; description: string }> {
     return Object.values(this.factories).map((f) => {
       const a = f();

@@ -93,11 +93,6 @@ describe('command stubs', () => {
 
   const cases: Array<{ name: string; args: string[]; expected: string }> = [
     {
-      name: 'agents list',
-      args: ['agents', 'list'],
-      expected: 'agents list not yet implemented',
-    },
-    {
       name: 'models list',
       args: ['models', 'list'],
       expected: 'models list not yet implemented',
@@ -117,18 +112,6 @@ describe('command stubs', () => {
       args: ['ci', 'templates', '--platform', 'github'],
       expected: 'ci templates not yet implemented',
     },
-    { name: 'eval', args: ['eval'], expected: 'eval not yet implemented' },
-    {
-      name: 'feedback import',
-      args: ['feedback', 'import', 'fb.json'],
-      expected: 'feedback import not yet implemented',
-    },
-    { name: 'remediate', args: ['remediate'], expected: 'remediate not yet implemented' },
-    {
-      name: 'remediate --finding',
-      args: ['remediate', '--finding', 'EH-0001'],
-      expected: 'remediate not yet implemented',
-    },
   ];
 
   for (const c of cases) {
@@ -138,4 +121,36 @@ describe('command stubs', () => {
       expect(result.exitCode).toBe(0);
     });
   }
+
+  it('agents list prints all 9 registered agents and exits 0', async () => {
+    const result = await invoke(['agents', 'list']);
+    expect(result.stdout).toContain('Registered agents (9)');
+    expect(result.stdout).toContain('security');
+    expect(result.stdout).toContain('remediation');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('eval exits 1 when no config is present', async () => {
+    const result = await invoke(['eval']);
+    expect(result.stderr).toContain('No config found');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('feedback import exits 1 when file does not exist', async () => {
+    const result = await invoke(['feedback', 'import', 'nonexistent-fb.json']);
+    expect(result.stderr).toContain('Failed to import feedback');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('remediate exits 1 when --finding is missing', async () => {
+    const result = await invoke(['remediate']);
+    expect(result.stderr).toContain('--finding');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('remediate --finding exits 1 when no config is present', async () => {
+    const result = await invoke(['remediate', '--finding', 'EH-0001']);
+    expect(result.stderr).toContain('No config found');
+    expect(result.exitCode).toBe(1);
+  });
 });
