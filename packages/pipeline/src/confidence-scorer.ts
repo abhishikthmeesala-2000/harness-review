@@ -29,7 +29,9 @@ export const ConfidenceScorer = {
 
     if (finding.falsePositiveRisk === 'high') score -= 0.1;
 
-    return Math.min(1, Math.max(0, score));
+    // Round to 4 decimal places to avoid IEEE-754 accumulation errors
+    // (e.g. 0.5 + 0.2 + 0.1 === 0.7999... not 0.8 in JS floats).
+    return Math.min(1, Math.max(0, Math.round(score * 10000) / 10000));
   },
 
   rollup(

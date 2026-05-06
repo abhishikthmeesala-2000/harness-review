@@ -27,8 +27,9 @@ const ALL_AGENTS_CONFIG = ConfigSchema.parse({
     ],
   },
   models: {},
-  // Use 0.75 so findings at exactly 0.8 aren't lost to IEEE-754 rounding (0.5+0.2+0.1 = 0.7999...).
-  review: { confidenceThreshold: 0.75 },
+  // Use default threshold (0.8). ConfidenceScorer rounds to 4 decimal places,
+  // so 0.5+0.2+0.1 resolves to exactly 0.8 and passes the gate.
+  review: { confidenceThreshold: 0.8 },
 });
 
 describe('EvalRunner integration', () => {
