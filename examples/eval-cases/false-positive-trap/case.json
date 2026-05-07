@@ -1,6 +1,12 @@
 {
-  "id": "false-positive-trap",
+  "name": "false-positive-trap",
   "description": "Safe CRUD service update — no issues expected, zero false positives allowed.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Update user service CRUD methods",
+  "prBody": "Uses parameterized queries throughout. No raw SQL interpolation.",
+  "expectedFindings": [],
   "expectedDecision": "approved",
   "maxFalsePositives": 0
 }

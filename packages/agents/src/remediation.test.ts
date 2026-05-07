@@ -42,7 +42,8 @@ describe('RemediationAgent', () => {
     const plan = await agent.remediate(MOCK_FINDING, makeBundle(), new MockProvider());
     const result = RemediationPlanSchema.safeParse(plan);
     expect(result.success).toBe(true);
-    expect(plan.steps.length).toBeGreaterThanOrEqual(1);
-    expect(['low', 'medium', 'high']).toContain(plan.estimatedEffort);
+    expect(plan.plan.length).toBeGreaterThan(0);
+    expect(Array.isArray(plan.testRecommendations)).toBe(true);
+    expect(['trivial', 'small', 'medium', 'large']).toContain(plan.estimatedEffort);
   });
 });

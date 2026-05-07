@@ -1,10 +1,20 @@
 {
-  "id": "domain-policy-violation",
+  "name": "domain-policy-violation",
   "description": "Payment handler added without idempotency key — domain-policy agent should flag it.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add Stripe charge endpoint",
+  "prBody": "",
   "expectedFindings": [
-    { "dimension": "domain-policy" }
+    {
+      "category": "domain-policy",
+      "fileGlob": "src/payments/charge.ts",
+      "mustMatchPhrases": ["idempotency"]
+    }
   ],
   "expectedDecision": "needs_manual_review",
+  "maxFalsePositives": 1,
   "contextRules": [
     {
       "path": "rules/payments.md",

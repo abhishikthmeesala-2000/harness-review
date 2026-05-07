@@ -7,9 +7,13 @@ import { renderDiffSummary } from './prompt-utils.js';
 
 export const RemediationPlanSchema = z.object({
   findingId: z.string().min(1),
-  steps: z.array(z.string().min(1)).min(1),
-  estimatedEffort: z.enum(['low', 'medium', 'high']),
-  notes: z.string().optional(),
+  /** Step-by-step remediation instructions in Markdown. */
+  plan: z.string().min(1),
+  /** Optional unified diff patch showing the suggested code change. */
+  suggestedPatch: z.string().optional(),
+  /** Test scenarios recommended to verify the fix. */
+  testRecommendations: z.array(z.string()),
+  estimatedEffort: z.enum(['trivial', 'small', 'medium', 'large']),
 });
 
 export type RemediationPlan = z.infer<typeof RemediationPlanSchema>;
@@ -38,7 +42,10 @@ export class RemediationAgent extends BaseAgent {
       `Why it matters: ${finding.whyItMatters}`,
       `Suggested fix: ${finding.suggestedFix}`,
       '',
-      'Return a JSON object: { findingId: string, steps: string[], estimatedEffort: "low"|"medium"|"high", notes?: string }',
+      'Return a JSON object with this exact shape:',
+      '{ findingId: string, plan: string, suggestedPatch?: string, testRecommendations: string[], estimatedEffort: "trivial"|"small"|"medium"|"large" }',
+      'plan: step-by-step instructions in Markdown.',
+      'testRecommendations: array of test scenarios to verify the fix.',
       '',
       'Changed files:',
       renderDiffSummary(context.diff),

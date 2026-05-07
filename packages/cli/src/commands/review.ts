@@ -7,6 +7,7 @@ import {
 import {
   ConfigLoader,
   ContextEngine,
+  createAlmAdapter,
   GitDiffParser,
   RepoProfiler,
   SecretRedactor,
@@ -111,6 +112,19 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   const reports = ReportGenerator.generateAll(result, meta, config);
   ReportWriter.write(reports, path.join(repoRoot, config.reports.outputDir), runId);
 
+  // ALM integration — only when postComments is explicitly enabled
+  if (config.ci.postComments) {
+    try {
+      const alm = createAlmAdapter(config);
+      const prRef = detectPrRef(); // extract from env vars GITHUB_REPOSITORY + GITHUB_PR_NUMBER
+      if (prRef && reports['markdown']) {
+        await alm.postSummary(prRef, reports['markdown']);
+      }
+    } catch {
+      // never fail the build because of ALM errors
+    }
+  }
+
   // Print summary
   const decisionFn = DECISION_COLOR[result.decision] ?? chalk.white;
   console.log('');
@@ -140,4 +154,13 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   } else {
     process.exit(0);
   }
+}
+
+function detectPrRef(): { owner: string; repo: string; pullNumber: number } | null {
+  const repo = process.env['GITHUB_REPOSITORY']; // "owner/repo"
+  const prNum = process.env['GITHUB_PR_NUMBER'] ?? process.env['PR_NUMBER'];
+  if (!repo || !prNum) return null;
+  const [owner, repoName] = repo.split('/');
+  if (!owner || !repoName) return null;
+  return { owner, repo: repoName, pullNumber: Number(prNum) };
 }

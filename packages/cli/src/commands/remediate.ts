@@ -72,12 +72,15 @@ export async function remediateCommand(options: RemediateOptions): Promise<void>
 
     console.log(`Finding: ${chalk.cyan(plan.findingId)}`);
     console.log(`Effort:  ${chalk.yellow(plan.estimatedEffort)}`);
-    console.log(`\nSteps:`);
-    plan.steps.forEach((step, i) => {
-      console.log(`  ${i + 1}. ${step}`);
-    });
-    if (plan.notes) {
-      console.log(`\nNotes: ${plan.notes}`);
+    console.log(`\nPlan:\n${plan.plan}`);
+    if (plan.testRecommendations.length > 0) {
+      console.log(`\nTest recommendations:`);
+      plan.testRecommendations.forEach((t, i) => {
+        console.log(`  ${i + 1}. ${t}`);
+      });
+    }
+    if (plan.suggestedPatch) {
+      console.log(`\nSuggested patch:\n${plan.suggestedPatch}`);
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
