@@ -4,7 +4,17 @@
     "engagement": "sample-engagement"
   },
   "agents": {
-    "enabled": ["security", "reviewer", "testing"]
+    "enabled": [
+      "reviewer",
+      "security",
+      "domain-policy",
+      "testing",
+      "data-architecture",
+      "sre-observability",
+      "design-principles",
+      "pr-intent-gap",
+      "remediation"
+    ]
   },
   "providers": {
     "mock": {}

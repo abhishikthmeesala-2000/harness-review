@@ -19,7 +19,7 @@ afterEach(() => {
 
 function readMetrics(): MetricsSummary {
   return JSON.parse(
-    readFileSync(join(tmpDir, '.engagement-harness/metrics.json'), 'utf8'),
+    readFileSync(join(tmpDir, '.engagement-harness/feedback/metrics.json'), 'utf8'),
   ) as MetricsSummary;
 }
 
@@ -34,44 +34,44 @@ describe('FeedbackImporter', () => {
     const importer = new FeedbackImporter();
     const file = writeFeedbackFile({
       findingId: 'EH-0001',
-      rating: 'correct',
-      agent: 'security',
+      runId: 'run-2026-01-01T00-00-00Z',
+      state: 'accepted',
+      timestamp: '2026-01-01T00:00:00Z',
     });
     await importer.import(file, tmpDir);
     const metrics = readMetrics();
     expect(metrics.totalEntries).toBe(1);
-    expect(metrics.byRating['correct']).toBe(1);
-    expect(metrics.byAgent['security']).toBe(1);
+    expect(metrics.byState['accepted']).toBe(1);
     expect(metrics.entries[0]?.findingId).toBe('EH-0001');
   });
 
   it('imports an array of feedback entries', async () => {
     const importer = new FeedbackImporter();
     const file = writeFeedbackFile([
-      { findingId: 'EH-0001', rating: 'correct', agent: 'security' },
-      { findingId: 'EH-0002', rating: 'false_positive', agent: 'reviewer' },
+      { findingId: 'EH-0001', runId: 'run-1', state: 'accepted', timestamp: '2026-01-01T00:00:00Z' },
+      { findingId: 'EH-0002', runId: 'run-1', state: 'false_positive', timestamp: '2026-01-01T00:00:00Z' },
     ]);
     await importer.import(file, tmpDir);
     const metrics = readMetrics();
     expect(metrics.totalEntries).toBe(2);
-    expect(metrics.byRating['correct']).toBe(1);
-    expect(metrics.byRating['false_positive']).toBe(1);
+    expect(metrics.byState['accepted']).toBe(1);
+    expect(metrics.byState['false_positive']).toBe(1);
   });
 
   it('accumulates across multiple imports', async () => {
     const importer = new FeedbackImporter();
-    const file1 = writeFeedbackFile({ findingId: 'EH-0001', rating: 'correct' });
-    const file2 = writeFeedbackFile({ findingId: 'EH-0002', rating: 'correct' });
+    const file1 = writeFeedbackFile({ findingId: 'EH-0001', runId: 'run-1', state: 'accepted', timestamp: '2026-01-01T00:00:00Z' });
+    const file2 = writeFeedbackFile({ findingId: 'EH-0002', runId: 'run-1', state: 'accepted', timestamp: '2026-01-01T00:00:00Z' });
     await importer.import(file1, tmpDir);
     await importer.import(file2, tmpDir);
     const metrics = readMetrics();
     expect(metrics.totalEntries).toBe(2);
-    expect(metrics.byRating['correct']).toBe(2);
+    expect(metrics.byState['accepted']).toBe(2);
   });
 
   it('throws on invalid feedback entry', async () => {
     const importer = new FeedbackImporter();
-    const file = writeFeedbackFile({ findingId: '', rating: 'not-a-valid-rating' });
+    const file = writeFeedbackFile({ findingId: '', state: 'not-a-valid-state' });
     await expect(importer.import(file, tmpDir)).rejects.toThrow();
   });
 });

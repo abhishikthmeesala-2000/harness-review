@@ -1,7 +1,18 @@
 {
-  "id": "testing-no-coverage",
+  "name": "testing-no-coverage",
   "description": "New public function added without any tests — testing agent should flag missing coverage.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add inclusiveRange utility function",
+  "prBody": "",
   "expectedFindings": [
-    { "dimension": "testing" }
-  ]
+    {
+      "category": "testing",
+      "fileGlob": "**",
+      "mustMatchPhrases": []
+    }
+  ],
+  "expectedDecision": "approved_with_warnings",
+  "maxFalsePositives": 1
 }

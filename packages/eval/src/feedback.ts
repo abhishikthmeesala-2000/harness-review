@@ -5,10 +5,10 @@ import { z } from 'zod';
 
 export const FeedbackEntrySchema = z.object({
   findingId: z.string().min(1),
-  rating: z.enum(['correct', 'false_positive', 'low_priority']),
-  agent: z.string().optional(),
-  comment: z.string().optional(),
-  timestamp: z.string().datetime().optional(),
+  runId: z.string().min(1),
+  state: z.enum(['accepted', 'dismissed', 'false_positive', 'fixed', 'ignored', 'overridden']),
+  note: z.string().optional(),
+  timestamp: z.string().datetime(),
 });
 
 export type FeedbackEntry = z.infer<typeof FeedbackEntrySchema>;
@@ -16,18 +16,22 @@ export type FeedbackEntry = z.infer<typeof FeedbackEntrySchema>;
 export interface MetricsSummary {
   lastUpdated: string;
   totalEntries: number;
-  byRating: Record<string, number>;
-  byAgent: Record<string, number>;
+  byState: Record<string, number>;
   entries: FeedbackEntry[];
 }
 
-const METRICS_PATH = '.engagement-harness/metrics.json';
+const METRICS_PATH = '.engagement-harness/feedback/metrics.json';
+
+const ALL_STATES = ['accepted', 'dismissed', 'false_positive', 'fixed', 'ignored', 'overridden'];
+
+function emptyByState(): Record<string, number> {
+  return Object.fromEntries(ALL_STATES.map((s) => [s, 0]));
+}
 
 const EMPTY_METRICS: MetricsSummary = {
   lastUpdated: '',
   totalEntries: 0,
-  byRating: { correct: 0, false_positive: 0, low_priority: 0 },
-  byAgent: {},
+  byState: emptyByState(),
   entries: [],
 };
 
@@ -48,15 +52,12 @@ export class FeedbackImporter {
     const metricsFile = join(repoRoot, METRICS_PATH);
     const metrics: MetricsSummary = existsSync(metricsFile)
       ? (JSON.parse(readFileSync(metricsFile, 'utf8')) as MetricsSummary)
-      : { ...EMPTY_METRICS, byRating: { correct: 0, false_positive: 0, low_priority: 0 }, byAgent: {} };
+      : { ...EMPTY_METRICS, byState: emptyByState() };
 
     for (const entry of entries) {
       metrics.entries.push(entry);
       metrics.totalEntries++;
-      metrics.byRating[entry.rating] = (metrics.byRating[entry.rating] ?? 0) + 1;
-      if (entry.agent) {
-        metrics.byAgent[entry.agent] = (metrics.byAgent[entry.agent] ?? 0) + 1;
-      }
+      metrics.byState[entry.state] = (metrics.byState[entry.state] ?? 0) + 1;
     }
     metrics.lastUpdated = new Date().toISOString();
 

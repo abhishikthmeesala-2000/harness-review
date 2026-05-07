@@ -7,7 +7,7 @@ import { AgentOrchestrator } from '@engagement-harness/agents';
 import { FindingPipeline } from '@engagement-harness/pipeline';
 import micromatch from 'micromatch';
 
-import { EvalCaseSchema, type EvalCase } from './case-schema.js';
+import { EvalCaseSchema, type EvalCase, type ExpectedFinding } from './case-schema.js';
 
 const EVAL_PROFILE = {
   language: 'typescript' as const,
@@ -21,6 +21,7 @@ const EVAL_PROFILE = {
 };
 
 export interface EvalResult {
+  /** Populated from EvalCase.name */
   caseId: string;
   passed: boolean;
   findings: Finding[];
@@ -90,13 +91,16 @@ export class EvalRunner {
       };
     }
 
+    // Resolve the fixture dir. fixtureRepoPath is relative to the case directory.
+    const fixtureDir = join(caseDir, evalCase.fixtureRepoPath);
+
     let diff: FileDiff[];
     try {
-      const patchText = readFileSync(join(caseDir, 'diff.patch'), 'utf8');
+      const patchText = readFileSync(join(fixtureDir, 'diff.patch'), 'utf8');
       diff = parseUnifiedDiff(patchText);
     } catch (err) {
       return {
-        caseId: evalCase.id,
+        caseId: evalCase.name,
         passed: false,
         findings: [],
         decision: 'approved',
@@ -105,12 +109,7 @@ export class EvalRunner {
       };
     }
 
-    // Apply optional file glob filter.
-    if (evalCase.fileGlob) {
-      diff = diff.filter((f) => micromatch([f.path], evalCase.fileGlob!).length > 0);
-    }
-
-    // Inject contextRules as rule entries.
+    // Inject contextRules as rule entries (extension for diff.patch-based eval cases).
     const entries: ContextEntry[] = (evalCase.contextRules ?? []).map((r) => ({
       path: r.path,
       content: r.content,
@@ -123,6 +122,11 @@ export class EvalRunner {
       entries,
       diff,
       repoProfile: EVAL_PROFILE,
+      // Pass PR metadata from case fixture so pr-intent-gap agent can use it.
+      prMetadata: {
+        title: evalCase.prTitle || undefined,
+        body: evalCase.prBody || undefined,
+      },
     };
 
     let findings: Finding[] = [];
@@ -140,7 +144,7 @@ export class EvalRunner {
     const passed = EvalRunner.evaluate(evalCase, findings, decision, errors);
 
     return {
-      caseId: evalCase.id,
+      caseId: evalCase.name,
       passed,
       findings,
       decision,
@@ -157,46 +161,69 @@ export class EvalRunner {
   ): boolean {
     let ok = true;
 
-    // Check expected findings by dimension.
-    for (const expected of evalCase.expectedFindings ?? []) {
-      const found = findings.some(
-        (f) =>
-          f.dimension === expected.dimension &&
-          (expected.file === undefined || f.file === expected.file) &&
-          (expected.severity === undefined || f.severity === expected.severity),
-      );
+    // Check each expected finding by category, fileGlob, and mustMatchPhrases.
+    for (const expected of evalCase.expectedFindings) {
+      const found = findings.some((f) => EvalRunner.matchesFinding(f, expected));
       if (!found) {
-        errors.push(`Expected finding with dimension="${expected.dimension}" not present`);
-        ok = false;
-      }
-    }
-
-    // Check expected decision.
-    if (evalCase.expectedDecision !== undefined && decision !== evalCase.expectedDecision) {
-      errors.push(`Expected decision "${evalCase.expectedDecision}" but got "${decision}"`);
-      ok = false;
-    }
-
-    // Check max false positives.
-    if (evalCase.maxFalsePositives !== undefined) {
-      const fp = EvalRunner.countFalsePositives(evalCase, findings);
-      if (fp > evalCase.maxFalsePositives) {
         errors.push(
-          `False positive count ${fp} exceeds maxFalsePositives ${evalCase.maxFalsePositives}`,
+          `Expected finding with category="${expected.category}" (fileGlob="${expected.fileGlob}") not present`,
         );
         ok = false;
       }
     }
 
+    // Check expected decision.
+    if (decision !== evalCase.expectedDecision) {
+      errors.push(`Expected decision "${evalCase.expectedDecision}" but got "${decision}"`);
+      ok = false;
+    }
+
+    // Check max false positives.
+    const fp = EvalRunner.countFalsePositives(evalCase, findings);
+    if (fp > evalCase.maxFalsePositives) {
+      errors.push(
+        `False positive count ${fp} exceeds maxFalsePositives ${evalCase.maxFalsePositives}`,
+      );
+      ok = false;
+    }
+
     return ok && errors.length === 0;
   }
 
+  private static matchesFinding(finding: Finding, expected: ExpectedFinding): boolean {
+    // Category must match (dimension mirrors category in canonical schema).
+    if (finding.category !== expected.category) return false;
+
+    // Optional severity filter.
+    if (expected.severity !== undefined && finding.severity !== expected.severity) return false;
+
+    // File must match the fileGlob.
+    if (expected.fileGlob !== '**' && micromatch([finding.file], [expected.fileGlob]).length === 0) {
+      return false;
+    }
+
+    // All mustMatchPhrases must appear in the finding title or any evidence content.
+    if (expected.mustMatchPhrases.length > 0) {
+      const haystack = [
+        finding.title,
+        ...finding.evidence.map((e) => e.content),
+      ]
+        .join(' ')
+        .toLowerCase();
+      const allMatch = expected.mustMatchPhrases.every((phrase) =>
+        haystack.includes(phrase.toLowerCase()),
+      );
+      if (!allMatch) return false;
+    }
+
+    return true;
+  }
+
   private static countFalsePositives(evalCase: EvalCase, findings: Finding[]): number {
-    // Findings not covered by any expectedFinding are considered false positives.
-    const expected = evalCase.expectedFindings ?? [];
-    if (expected.length === 0) return findings.length;
+    // Findings not covered by any expectedFinding are false positives.
+    if (evalCase.expectedFindings.length === 0) return findings.length;
     return findings.filter(
-      (f) => !expected.some((e) => e.dimension === f.dimension),
+      (f) => !evalCase.expectedFindings.some((e) => e.category === f.category),
     ).length;
   }
 }

@@ -230,14 +230,17 @@ const DEFAULT_FIXTURES: Record<string, string> = {
     },
   ]),
   // Remediation agent — returns JSON object (not array); remediate() extracts via {...} regex.
+  // Returns JSON object (not array) — RemediationAgent.remediate() extracts via /\{[\s\S]*\}/ regex.
   'dimension: remediation': JSON.stringify({
     findingId: 'EH-MOCK-REM-1',
-    steps: [
-      'Add requireAdmin() middleware before the route handler.',
-      'Write an integration test that sends an unauthenticated POST /admin/delete and asserts HTTP 401.',
-      'Deploy behind a feature flag and verify in staging before enabling in production.',
+    plan: '1. Add `requireAdmin()` middleware before the route handler.\n2. Deploy behind a feature flag and verify in staging before enabling in production.',
+    suggestedPatch:
+      '--- a/src/routes/admin.ts\n+++ b/src/routes/admin.ts\n@@ -1 +1 @@\n-app.post("/admin/delete", async (req, res) => {\n+app.post("/admin/delete", requireAdmin(), async (req, res) => {',
+    testRecommendations: [
+      'Send unauthenticated POST /admin/delete and assert HTTP 401.',
+      'Send authenticated POST /admin/delete with admin token and assert HTTP 200.',
     ],
-    estimatedEffort: 'low',
+    estimatedEffort: 'small',
   }),
 };
 
