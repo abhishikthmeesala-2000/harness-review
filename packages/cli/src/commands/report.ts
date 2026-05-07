@@ -54,12 +54,14 @@ export function reportLatestCommand(): void {
   const runs = listRunDirs(outputDir);
   if (runs.length === 0) {
     console.error(chalk.yellow('No reports found. Run `engagement-harness review --ci` first.'));
+    process.exit(1);
     return;
   }
   const latestDir = path.join(outputDir, runs[0]!);
   const md = readMarkdown(latestDir);
   if (!md) {
     console.error(chalk.red(`report.md not found in ${latestDir}`));
+    process.exit(1);
     return;
   }
   process.stdout.write(md);
@@ -71,11 +73,13 @@ export function reportRunCommand(runId: string): void {
   const runDir = path.join(outputDir, `run-${runId}`);
   if (!existsSync(runDir)) {
     console.error(chalk.red(`Run "${runId}" not found in ${outputDir}`));
+    process.exit(1);
     return;
   }
   const md = readMarkdown(runDir);
   if (!md) {
     console.error(chalk.red(`report.md not found in ${runDir}`));
+    process.exit(1);
     return;
   }
   process.stdout.write(md);
