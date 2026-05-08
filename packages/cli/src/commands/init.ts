@@ -202,7 +202,13 @@ export async function runInit(input: RunInitInput): Promise<{ configPath: string
   log(
     `  Config: ${path.relative(cwd, ConfigLoader.resolvePath(cwd)) || '.engagement-harness/config.json'}`,
   );
-  log(`  Detected: language=${profile.language ?? 'unknown'}, ci=${profile.ciProvider ?? 'none'}`);
+  log(
+    `  Detected: language=${profile.language ?? 'unknown'}, ci=${profile.ciProvider ?? 'none'}` +
+      (profile.framework ? `, framework=${profile.framework}` : '') +
+      (profile.testFramework ? `, tests=${profile.testFramework}` : '') +
+      (profile.isMonorepo ? ', monorepo=yes' : ''),
+  );
+  log(`  Agents enabled: ${answers.enabledAgents.length} (${answers.enabledAgents.join(', ')})`);
   log('');
   log(`Next: run ${chalk.cyan('engagement-harness doctor')} to verify the install.`);
 
@@ -213,72 +219,49 @@ async function promptAnswersInteractive(
   defaults: InitAnswers,
   profile: RepoProfile,
 ): Promise<InitAnswers> {
-  const { input, select, checkbox, number, confirm, editor } = await import('@inquirer/prompts');
+  const { input, select } = await import('@inquirer/prompts');
+
+  // Show what was auto-detected so the user knows what we found.
+  if (profile.language || profile.ciProvider) {
+    console.log(
+      chalk.dim(
+        `  Auto-detected: language=${profile.language ?? 'unknown'}, ci=${profile.ciProvider ?? 'none'}` +
+          (profile.framework ? `, framework=${profile.framework}` : ''),
+      ),
+    );
+    console.log('');
+  }
+
   const clientName = await input({ message: 'Client name', default: defaults.clientName });
-  const engagement = await input({ message: 'Engagement name', default: defaults.engagement });
-  const almPlatform = (await select({
-    message: 'ALM platform',
-    default: defaults.almPlatform,
-    choices: [
-      { value: 'github', name: 'GitHub' },
-      { value: 'gitlab', name: 'GitLab' },
-      { value: 'azure-devops', name: 'Azure DevOps' },
-      { value: 'bitbucket', name: 'Bitbucket' },
-      { value: 'none', name: 'None' },
-    ],
-  })) as AlmPlatform;
-  const enabledAgents = (await checkbox({
-    message: 'Enabled agents',
-    choices: DEFAULT_AGENT_IDS.map((id) => ({
-      value: id,
-      name: id,
-      checked: defaults.enabledAgents.includes(id),
-    })),
-  })) as string[];
-  const confidenceThreshold = (await number({
-    message: 'Confidence threshold (0..1)',
-    default: defaults.confidenceThreshold,
-    min: 0,
-    max: 1,
-  })) as number;
-  const severityThreshold = (await select({
-    message: 'Severity threshold',
-    default: defaults.severityThreshold,
-    choices: [
-      { value: 'low', name: 'low' },
-      { value: 'medium', name: 'medium' },
-      { value: 'high', name: 'high' },
-      { value: 'critical', name: 'critical' },
-    ],
-  })) as SeverityLevel;
-  const ignoredPathsRaw = await editor({
-    message: 'Ignored paths (one glob per line)',
-    default: defaults.ignoredPaths.join('\n'),
-    waitForUserInput: false,
-  });
-  const ignoredPaths = ignoredPathsRaw
-    .split('\n')
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
-  const blockOnPolicy = await confirm({
-    message: 'Block CI on policy decisions?',
-    default: defaults.blockOnPolicy,
-  });
-  const postComments = await confirm({
-    message: 'Post inline comments to PRs?',
-    default: defaults.postComments,
-  });
-  void profile;
+  const engagement = await input({ message: 'Engagement name / phase', default: defaults.engagement });
+
+  // Only ask about ALM platform if we could not detect it automatically.
+  let almPlatform: AlmPlatform = defaults.almPlatform;
+  if (defaults.almPlatform === 'none') {
+    almPlatform = (await select({
+      message: 'ALM platform (for PR comments)',
+      default: 'none',
+      choices: [
+        { value: 'none', name: 'None — skip PR comments' },
+        { value: 'github', name: 'GitHub' },
+        { value: 'gitlab', name: 'GitLab' },
+        { value: 'azure-devops', name: 'Azure DevOps' },
+        { value: 'bitbucket', name: 'Bitbucket' },
+      ],
+    })) as AlmPlatform;
+  } else {
+    console.log(chalk.dim(`  ALM platform: ${defaults.almPlatform} (auto-detected)`));
+  }
+
+  // All agents are always enabled — no checkbox needed.
+  // Technical settings (confidenceThreshold, severityThreshold, ignoredPaths,
+  // blockOnPolicy, postComments) use safe defaults and can be tuned in config.json.
   return {
+    ...defaults,
     clientName,
     engagement,
     almPlatform,
-    enabledAgents,
-    confidenceThreshold,
-    severityThreshold,
-    ignoredPaths,
-    blockOnPolicy,
-    postComments,
+    enabledAgents: [...DEFAULT_AGENT_IDS],
   };
 }
 
