@@ -53,6 +53,131 @@ describe('MockProvider (deterministic)', () => {
   });
 });
 
+describe('MockProvider (diff-context patching)', () => {
+  // Prompt with a suspicious security line (hardcoded password)
+  const SECURITY_DIFF_PROMPT = [
+    'You are the Security agent.',
+    'Dimension: security',
+    'Changed files:',
+    '--- payment.js (modified)',
+    '@@ -10,11 +10,11 @@',
+    ' const a = 1;',
+    '-const old = doThing();',
+    '+const dbConfig = { password: "SuperSecret123!" };',
+  ].join('\n');
+
+  // Prompt with a neutral change (no security-suspicious content)
+  const NEUTRAL_DIFF_PROMPT = [
+    'You are the Security agent.',
+    'Dimension: security',
+    'Changed files:',
+    '--- payment.js (modified)',
+    '@@ -10,11 +10,11 @@',
+    ' const a = 1;',
+    '-const old = doThing();',
+    '+const newVal = doOtherThing();',
+  ].join('\n');
+
+  it('patches file to the actual changed file from diff', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete(SECURITY_DIFF_PROMPT);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.file).toBe('payment.js');
+  });
+
+  it('patches lineStart and lineEnd to the actual hunk range', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete(SECURITY_DIFF_PROMPT);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    expect(findings[0]?.lineStart).toBe(10);
+    expect(findings[0]?.lineEnd).toBe(20); // 10 + 11 - 1
+  });
+
+  it('does NOT use hardcoded path (src/routes/admin.ts) when real diff is present', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete(SECURITY_DIFF_PROMPT);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    expect(findings[0]?.file).not.toBe('src/routes/admin.ts');
+  });
+
+  it('updates diff evidence to the suspicious line when security pattern found', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete(SECURITY_DIFF_PROMPT);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    const evidence = findings[0]?.evidence as Array<Record<string, unknown>>;
+    const diffEvidence = evidence.find((e) => e['type'] === 'diff');
+    expect(diffEvidence?.['content']).toBe('const dbConfig = { password: "SuperSecret123!" };');
+  });
+
+  it('keeps original evidence when no security pattern found in diff (verifier handles rejection)', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete(NEUTRAL_DIFF_PROMPT);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    const evidence = findings[0]?.evidence as Array<Record<string, unknown>>;
+    const diffEvidence = evidence.find((e) => e['type'] === 'diff');
+    // Original hardcoded evidence preserved — verifier will reject if not in diff
+    expect(diffEvidence?.['content']).toBe('app.post("/admin/delete", async (req, res) => {');
+    // But file is still patched
+    expect(findings[0]?.file).toBe('payment.js');
+  });
+
+  it('falls back to fixture paths when prompt has no diff', async () => {
+    const provider = new MockProvider();
+    const { content } = await provider.complete('Dimension: security\n(no diff here)');
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    expect(findings[0]?.file).toBe('src/routes/admin.ts');
+  });
+
+  it('works with diff --git format', async () => {
+    const gitPrompt = [
+      'Dimension: security',
+      'diff --git a/api/auth.py b/api/auth.py',
+      '@@ -5,3 +5,4 @@',
+      "+app.route('/admin', async (req) => {",
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(gitPrompt);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    expect(findings[0]?.file).toBe('api/auth.py');
+    expect(findings[0]?.lineStart).toBe(5);
+  });
+
+  it('detects SQL injection via template literals as suspicious', async () => {
+    const sqlPrompt = [
+      'Dimension: security',
+      '--- server.js (added)',
+      '@@ -0,0 +1,5 @@',
+      '+const q = `SELECT * FROM users WHERE id = ${userId}`;',
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(sqlPrompt);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    const evidence = findings[0]?.evidence as Array<Record<string, unknown>>;
+    const diffEvidence = evidence.find((e) => e['type'] === 'diff');
+    expect(diffEvidence?.['content']).toContain('SELECT * FROM users');
+  });
+
+  it('treats a [REDACTED_SECRET] line as suspicious (real pipeline redacts before mock sees prompt)', async () => {
+    const redactedPrompt = [
+      'You are the Security agent.',
+      'Dimension: security',
+      'Changed files:',
+      '--- config.js (modified)',
+      '@@ -1,3 +1,3 @@',
+      ' const host = "localhost";',
+      '+const dbConfig = { password: [REDACTED_SECRET], database: "myapp" };',
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(redactedPrompt);
+    const findings = JSON.parse(content) as Array<Record<string, unknown>>;
+    const evidence = findings[0]?.evidence as Array<Record<string, unknown>>;
+    const diffEvidence = evidence.find((e) => e['type'] === 'diff');
+    expect(diffEvidence?.['content']).toContain('[REDACTED_SECRET]');
+    expect(findings[0]?.file).toBe('config.js');
+  });
+});
+
 describe('MockProvider (scripted)', () => {
   let dir: string;
   let scriptPath: string;
