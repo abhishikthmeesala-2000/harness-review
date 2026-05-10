@@ -89,7 +89,6 @@ export const FindingPipeline = {
     // Also move verifier-rejected findings to rejected list with stage 'verifier'
     // (they passed confidence calibration but will fail quality gate — reclassify)
     const finalRejected: RejectedEntry[] = [];
-    const qualityGateIds = new Set(gateFailed.map((f) => f.id));
     for (const r of rejected) {
       if (r.stage === 'quality-gate' && r.finding.verification?.status === 'rejected') {
         finalRejected.push({ ...r, stage: 'verifier' });
