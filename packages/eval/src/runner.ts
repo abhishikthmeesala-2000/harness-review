@@ -35,6 +35,16 @@ export interface EvalReport {
   totalCases: number;
   passed: number;
   failed: number;
+  /** True positives: expected findings that were published. */
+  truePositives: number;
+  /** False positives: published findings matching no expected finding. */
+  falsePositives: number;
+  /** False negatives: expected findings that were never published. */
+  falseNegatives: number;
+  /** TP / (TP + FP), or null when no findings were published. */
+  precision: number | null;
+  /** TP / (TP + FN), or null when no findings were expected. */
+  recall: number | null;
   results: EvalResult[];
 }
 
@@ -55,11 +65,34 @@ export class EvalRunner {
     }
 
     const passed = results.filter((r) => r.passed).length;
+
+    // Aggregate TP/FP/FN across all cases for precision and recall.
+    // TP = published findings matched to an expected finding = published - FP.
+    // FN = expected findings that weren't published; tracked via per-case errors.
+    let truePositives = 0;
+    let falsePositives = 0;
+    let falseNegatives = 0;
+    for (const r of results) {
+      falsePositives += r.falsePositiveCount;
+      truePositives += Math.max(0, r.findings.length - r.falsePositiveCount);
+      falseNegatives += r.errors.filter((e) => e.startsWith('Expected finding')).length;
+    }
+
+    const precision =
+      truePositives + falsePositives > 0 ? truePositives / (truePositives + falsePositives) : null;
+    const recall =
+      truePositives + falseNegatives > 0 ? truePositives / (truePositives + falseNegatives) : null;
+
     const report: EvalReport = {
       timestamp: new Date().toISOString(),
       totalCases: results.length,
       passed,
       failed: results.length - passed,
+      truePositives,
+      falsePositives,
+      falseNegatives,
+      precision,
+      recall,
       results,
     };
 
