@@ -42,6 +42,14 @@ cd packages/cli
 pnpm link --global
 ```
 
+> **Troubleshooting:** If `pnpm link --global` fails with `ERR_PNPM_NO_GLOBAL_BIN_DIR`, pnpm has no global bin directory configured. Fix it with:
+> ```bash
+> pnpm setup          # adds PNPM_HOME to your shell profile
+> source ~/.zshrc     # or ~/.bashrc — reload the profile
+> pnpm link --global  # retry
+> ```
+> Alternatively, skip global linking entirely and invoke the CLI directly via `node packages/cli/dist/bin/engagement-harness.js`.
+
 ### Initialize a repository
 
 Run this inside the repository you want to review:
