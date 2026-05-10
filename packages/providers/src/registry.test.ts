@@ -1,7 +1,7 @@
 import { ConfigSchema, type Config } from '@engagement-harness/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NotImplementedError } from './interface.js';
+import { ProviderError } from './interface.js';
 import { MockProvider } from './mock.js';
 import { ProviderRegistry } from './registry.js';
 
@@ -12,7 +12,18 @@ function buildConfig(overrides: Partial<Config> = {}): Config {
   });
 }
 
+beforeEach(() => {
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+    new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+  );
+  process.env.OPENAI_API_KEY = 'sk-test-openai';
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+});
+
 afterEach(() => {
+  vi.restoreAllMocks();
+  delete process.env.OPENAI_API_KEY;
+  delete process.env.ANTHROPIC_API_KEY;
   ProviderRegistry.reset();
 });
 
@@ -34,13 +45,18 @@ describe('ProviderRegistry', () => {
     expect(() => ProviderRegistry.get('does-not-exist', buildConfig())).toThrow(/Unknown provider/);
   });
 
-  it('returns the OpenAI stub when configured; complete() throws NotImplementedError', async () => {
+  it('returns an OpenAIProvider when configured with key set', () => {
     const config = buildConfig({
       providers: { mock: {}, openai: { model: 'gpt-test' } },
     });
     const provider = ProviderRegistry.get('openai', config);
     expect(provider.name).toBe('openai');
-    await expect(provider.complete('hi')).rejects.toBeInstanceOf(NotImplementedError);
+  });
+
+  it('throws ProviderError when openai requested but OPENAI_API_KEY missing', () => {
+    delete process.env.OPENAI_API_KEY;
+    const config = buildConfig({ providers: { mock: {}, openai: { model: 'gpt-test' } } });
+    expect(() => ProviderRegistry.get('openai', config)).toThrow(ProviderError);
   });
 
   it('throws a clear error when openai is requested but not configured', () => {
