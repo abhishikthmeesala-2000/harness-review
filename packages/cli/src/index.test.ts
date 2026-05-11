@@ -103,8 +103,14 @@ describe('command stubs', () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it('ci templates prints github yaml and exits 0', async () => {
+  it('ci templates writes github yaml to disk by default and exits 0', async () => {
     const result = await invoke(['ci', 'templates', '--platform', 'github']);
+    expect(result.stdout).toContain('.github/workflows/engagement-harness.yml');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('ci templates gitlab prints yaml to stdout by default and exits 0', async () => {
+    const result = await invoke(['ci', 'templates', '--platform', 'gitlab']);
     expect(result.stdout).toContain('engagement-harness review --ci');
     expect(result.exitCode).toBe(0);
   });
