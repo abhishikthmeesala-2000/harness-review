@@ -1,4 +1,5 @@
-import { ProviderError, type CompletionOptions, type CompletionResult, type Provider } from './interface.js';
+import type { CompletionOptions, CompletionResult, Provider } from './interface.js';
+import { ProviderError } from './interface.js';
 
 export interface OpenAIProviderConfig {
   model: string;
@@ -6,36 +7,38 @@ export interface OpenAIProviderConfig {
 
 interface OpenAIChatResponse {
   choices: Array<{ message: { content: string } }>;
-  usage: { total_tokens: number };
+  usage?: { total_tokens: number };
 }
 
 export class OpenAIProvider implements Provider {
   public readonly name = 'openai';
-
-  private readonly apiKey: string;
   protected readonly config: OpenAIProviderConfig;
 
   constructor(config: OpenAIProviderConfig) {
-    const key = process.env.OPENAI_API_KEY;
-    if (!key) throw new ProviderError('OPENAI_API_KEY environment variable is not set', 'openai');
-    this.apiKey = key;
     this.config = config;
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult> {
+    const apiKey = process.env['OPENAI_API_KEY'];
+    if (!apiKey) {
+      throw new Error(
+        'OPENAI_API_KEY environment variable not set. Get one at https://platform.openai.com/api-keys',
+      );
+    }
+
     let response: Response;
     try {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
+          Authorization: `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${this.apiKey}`,
         },
         body: JSON.stringify({
-          model: this.config.model,
+          model: this.config.model || 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
-          max_tokens: options?.maxTokens ?? 4096,
-          temperature: options?.temperature ?? 0,
+          max_tokens: options?.maxTokens ?? 4000,
+          temperature: options?.temperature ?? 0.7,
         }),
       });
     } catch (err) {
@@ -44,16 +47,33 @@ export class OpenAIProvider implements Provider {
     }
 
     if (response.status === 429) {
-      throw new ProviderError('OpenAI rate limit exceeded; retry after backoff', 'openai');
-    }
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      throw new ProviderError(`OpenAI API error ${response.status}: ${body}`, 'openai');
+      throw new ProviderError(
+        'OpenAI rate limit exceeded. Wait and retry, or upgrade your plan.',
+        'openai',
+      );
     }
 
-    const data = (await response.json()) as OpenAIChatResponse;
+    if (!response.ok) {
+      throw new ProviderError(
+        `OpenAI request failed: HTTP ${response.status} ${response.statusText}`,
+        'openai',
+      );
+    }
+
+    let data: OpenAIChatResponse;
+    try {
+      data = (await response.json()) as OpenAIChatResponse;
+    } catch {
+      throw new ProviderError('OpenAI returned malformed JSON response', 'openai');
+    }
+
     const content = data.choices?.[0]?.message?.content;
-    if (!content) throw new ProviderError('OpenAI returned no content', 'openai');
+    if (typeof content !== 'string') {
+      throw new ProviderError(
+        'OpenAI response missing choices[0].message.content',
+        'openai',
+      );
+    }
 
     return { content, tokensUsed: data.usage?.total_tokens };
   }

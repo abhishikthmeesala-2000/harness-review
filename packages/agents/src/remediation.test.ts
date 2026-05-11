@@ -2,7 +2,7 @@ import { MockProvider } from '@engagement-harness/providers';
 import { describe, expect, it } from 'vitest';
 
 import { RemediationAgent, RemediationPlanSchema } from './remediation.js';
-import { makeBundle } from './test-helpers.js';
+import { makeBundle, makeConfig as _makeConfig } from './test-helpers.js';
 import type { CandidateFinding } from '@engagement-harness/core';
 
 const MOCK_FINDING: CandidateFinding = {
