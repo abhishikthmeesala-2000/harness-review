@@ -30,10 +30,17 @@ export async function evalCommand(): Promise<void> {
     }
   }
 
+  const pct = (n: number | null) => (n === null ? 'n/a' : `${(n * 100).toFixed(1)}%`);
+
   console.log('');
   console.log(
     `${report.passed}/${report.totalCases} cases passed` +
       (report.failed > 0 ? chalk.red(` — ${report.failed} failed`) : chalk.green(' — all pass')),
+  );
+  console.log(
+    `Precision: ${pct(report.precision)}  ` +
+    `Recall: ${pct(report.recall)}  ` +
+    `(TP=${report.truePositives} FP=${report.falsePositives} FN=${report.falseNegatives})`,
   );
 
   if (report.failed > 0) process.exit(1);

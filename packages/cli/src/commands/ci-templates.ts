@@ -1,5 +1,9 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
+
 export interface CiTemplatesOptions {
   platform?: string;
+  write?: boolean;
 }
 
 const GITHUB_ACTIONS_TEMPLATE = `# .github/workflows/engagement-harness.yml
@@ -124,8 +128,15 @@ const TEMPLATES: Record<string, string> = {
 
 const ALL_PLATFORMS = ['github', 'gitlab', 'azure-devops', 'bitbucket'] as const;
 
+const OUTPUT_PATHS: Record<string, string> = {
+  github: '.github/workflows/engagement-harness.yml',
+  gitlab: '.gitlab-ci.yml',
+  'azure-devops': 'azure-pipelines.yml',
+  bitbucket: 'bitbucket-pipelines.yml',
+};
+
 export function ciTemplatesCommand(options: CiTemplatesOptions): void {
-  const platform = options.platform;
+  const { platform, write } = options;
 
   if (!platform) {
     // No platform specified — print all templates
@@ -145,5 +156,12 @@ export function ciTemplatesCommand(options: CiTemplatesOptions): void {
     return;
   }
 
-  console.log(template);
+  if (write) {
+    const outPath = OUTPUT_PATHS[platform]!;
+    mkdirSync(dirname(outPath), { recursive: true });
+    writeFileSync(outPath, template, 'utf8');
+    console.log(`Written to ${outPath}`);
+  } else {
+    console.log(template);
+  }
 }
