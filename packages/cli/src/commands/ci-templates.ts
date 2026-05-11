@@ -156,7 +156,11 @@ export function ciTemplatesCommand(options: CiTemplatesOptions): void {
     return;
   }
 
-  if (write) {
+  // GitHub: write to disk by default (--no-write to override).
+  // All other platforms: print to stdout by default (--write to save).
+  const shouldWrite = write ?? platform === 'github';
+
+  if (shouldWrite) {
     const outPath = OUTPUT_PATHS[platform]!;
     mkdirSync(dirname(outPath), { recursive: true });
     writeFileSync(outPath, template, 'utf8');
