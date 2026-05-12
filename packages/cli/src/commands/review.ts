@@ -38,6 +38,33 @@ export interface ReviewOptions {
   head?: string;
 }
 
+function resolveCommitSha(repoRoot: string, ref: string): string {
+  try {
+    return execSync('git rev-parse ' + ref.replace(/[^a-zA-Z0-9._~^@{}/\\-]/g, ''), {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    }).trim();
+  } catch {
+    return ref;
+  }
+}
+
+export function buildInlineCommentBody(f: { title: string; severity: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number }): string {
+  const pct = f.confidence !== undefined ? ` · confidence: ${Math.round(f.confidence * 100)}%` : '';
+  return [
+    `### [${f.severity.toUpperCase()}] ${f.title}`,
+    '',
+    `**Why it matters:** ${f.whyItMatters}`,
+    '',
+    `**Suggested fix:**`,
+    f.suggestedFix,
+    '',
+    `---`,
+    `*Engagement Harness · agent: \`${f.sourceAgent}\`${pct}*`,
+  ].join('\n');
+}
+
 function resolveMergeBase(repoRoot: string): string {
   try {
     return execSync('git merge-base origin/main HEAD', {
@@ -116,9 +143,18 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   if (config.ci.postComments) {
     try {
       const alm = createAlmAdapter(config);
-      const prRef = detectPrRef(); // extract from env vars GITHUB_REPOSITORY + GITHUB_PR_NUMBER
-      if (prRef && reports['markdown']) {
-        await alm.postSummary(prRef, reports['markdown']);
+      const prRef = detectPrRef();
+      if (prRef) {
+        const commitSha = resolveCommitSha(repoRoot, headRef);
+        // Post each finding as an inline PR comment
+        for (const finding of result.published) {
+          const body = buildInlineCommentBody(finding);
+          await alm.postInlineComment(prRef, commitSha, finding.file, finding.lineEnd, body);
+        }
+        // Post overall summary as a single PR comment
+        if (reports['markdown']) {
+          await alm.postSummary(prRef, reports['markdown']);
+        }
       }
     } catch {
       // never fail the build because of ALM errors

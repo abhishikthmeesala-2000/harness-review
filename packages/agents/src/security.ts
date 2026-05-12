@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { renderDiffSummary } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, renderDiffSummary } from './prompt-utils.js';
 
 export class SecurityAgent extends BaseAgent {
   readonly id = 'security';
@@ -14,10 +14,11 @@ export class SecurityAgent extends BaseAgent {
       'You are the Security agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       'Focus: missing authorization, injection risks, unsafe crypto, secret exposure, tenant isolation, input validation.',
-      'Return a JSON array of CandidateFinding objects. Reject anything you cannot quote from the diff.',
       '',
       'Changed files:',
       renderDiffSummary(context.diff),
+      '',
+      FINDING_SCHEMA_BLOCK,
     ].join('\n');
   }
 }

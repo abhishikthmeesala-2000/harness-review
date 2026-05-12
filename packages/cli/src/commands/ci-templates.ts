@@ -14,6 +14,9 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
 
+permissions:
+  pull-requests: write
+
 jobs:
   review:
     name: PR Review
@@ -34,6 +37,7 @@ jobs:
 
       - name: Run review
         env:
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_NUMBER: \${{ github.event.pull_request.number }}
           GITHUB_REPOSITORY: \${{ github.repository }}
           GITHUB_PR_TITLE: \${{ github.event.pull_request.title }}

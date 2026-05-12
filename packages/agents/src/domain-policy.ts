@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { renderDiffSummary } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, renderDiffSummary } from './prompt-utils.js';
 
 export class DomainPolicyAgent extends BaseAgent {
   readonly id = 'domain-policy';
@@ -22,13 +22,14 @@ export class DomainPolicyAgent extends BaseAgent {
       'You are the Domain-Policy agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       'You evaluate the diff against the client rules below. Flag concrete violations only, with the rule path in clientRuleReferences.',
-      'Return a JSON array of CandidateFinding objects.',
       '',
       'Client rules:',
       rulesBlock,
       '',
       'Changed files:',
       renderDiffSummary(context.diff),
+      '',
+      FINDING_SCHEMA_BLOCK,
     ].join('\n');
   }
 }
