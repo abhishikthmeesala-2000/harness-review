@@ -25,8 +25,22 @@ export class GitHubAlm implements AlmAdapter {
     } catch { /* never fail the build */ }
   }
 
-  async postInlineComment(_prRef: PrRef, _file: string, _line: number, _body: string): Promise<void> {
-    // inline comments require a commit SHA — not implemented in this phase, silently no-op
+  async postInlineComment(prRef: PrRef, commitSha: string, file: string, line: number, body: string): Promise<void> {
+    const token = process.env['GITHUB_TOKEN'];
+    if (!token) return;
+    const url = `https://api.github.com/repos/${prRef.owner}/${prRef.repo}/pulls/${prRef.pullNumber}/comments`;
+    try {
+      await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+        body: JSON.stringify({ body, commit_id: commitSha, path: file, line, side: 'RIGHT' }),
+      });
+    } catch { /* never fail the build */ }
   }
 
   async updateCheckStatus(_prRef: PrRef, _status: 'success' | 'failure' | 'pending', _summary: string): Promise<void> {

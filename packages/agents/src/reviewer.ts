@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { renderDiffSummary } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, renderDiffSummary } from './prompt-utils.js';
 
 export class ReviewerAgent extends BaseAgent {
   readonly id = 'reviewer';
@@ -14,10 +14,11 @@ export class ReviewerAgent extends BaseAgent {
       'You are the Reviewer agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       'Focus: logic bugs, edge cases, off-by-one errors, null/undefined handling, risky behavior changes.',
-      'Return a JSON array of CandidateFinding objects. Each MUST cite a diff line in evidence.',
       '',
       'Changed files:',
       renderDiffSummary(context.diff),
+      '',
+      FINDING_SCHEMA_BLOCK,
     ].join('\n');
   }
 }

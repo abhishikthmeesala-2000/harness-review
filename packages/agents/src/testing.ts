@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { renderDiffSummary } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, renderDiffSummary } from './prompt-utils.js';
 
 export class TestingAgent extends BaseAgent {
   readonly id = 'testing';
@@ -14,10 +14,11 @@ export class TestingAgent extends BaseAgent {
       'You are the Testing agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       'Focus: missing tests, weak assertions, untested edge cases, untested negative paths.',
-      'Return a JSON array of CandidateFinding objects.',
       '',
       'Changed files:',
       renderDiffSummary(context.diff),
+      '',
+      FINDING_SCHEMA_BLOCK,
     ].join('\n');
   }
 }
