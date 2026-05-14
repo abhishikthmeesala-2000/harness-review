@@ -4,6 +4,7 @@ import { ciTemplatesCommand, type CiTemplatesOptions } from './commands/ci-templ
 import { configValidateCommand } from './commands/config-validate.js';
 import { doctorCommand } from './commands/doctor.js';
 import { evalCommand } from './commands/eval.js';
+import { feedbackCollectCommand, type FeedbackCollectOptions } from './commands/feedback-collect.js';
 import { feedbackImportCommand } from './commands/feedback-import.js';
 import { initCommand, type InitOptions } from './commands/init.js';
 import { modelsListCommand } from './commands/models-list.js';
@@ -123,6 +124,15 @@ export function buildProgram(): Command {
     .description('Import a feedback JSON file')
     .action(async (file: string) => {
       await feedbackImportCommand(file);
+    });
+  feedback
+    .command('collect')
+    .description('Collect feedback from GitHub PR reaction emojis')
+    .requiredOption('--repo <owner/repo>', 'GitHub repository (owner/repo)')
+    .option('--pr <number>', 'specific PR number to scan', (v: string) => Number(v))
+    .option('--since <date>', 'ISO date or "Xdays" shorthand (default: 7 days ago)')
+    .action(async (options: FeedbackCollectOptions) => {
+      await feedbackCollectCommand(options);
     });
 
   program
