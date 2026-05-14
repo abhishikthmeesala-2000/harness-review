@@ -43,6 +43,23 @@ describe('ciTemplatesCommand', () => {
       expect(content).toContain('name: Engagement Harness Review');
     });
 
+    it('also writes feedback-collection.yml alongside engagement-harness.yml', () => {
+      ciTemplatesCommand({ platform: 'github' });
+      const content = readFileSync(
+        path.join(dir, '.github', 'workflows', 'feedback-collection.yml'),
+        'utf8',
+      );
+      expect(content).toContain('name: Collect Feedback from Reactions');
+      expect(content).toContain('feedback collect');
+      expect(content).toContain('cron:');
+      // checkout must carry token so git push is authorised
+      expect(content).toContain('token:');
+      // git add must not fail on first run when feedback dir absent
+      expect(content).toContain('2>/dev/null || true');
+      // push must be explicit about remote + ref
+      expect(content).toContain('git push origin HEAD');
+    });
+
     it('prints to stdout when write is explicitly false (programmatic override)', () => {
       ciTemplatesCommand({ platform: 'github', write: false });
       expect(consoleSpy).toHaveBeenCalledWith(
