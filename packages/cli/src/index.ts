@@ -107,6 +107,8 @@ export function buildProgram(): Command {
     .description('Generate CI workflow templates')
     .option('--platform <name>', 'CI platform: github | gitlab | azure-devops | bitbucket')
     .option('--write', 'Write the template file to disk (default for github; use --no-write to print instead)')
+    .option('--no-print', 'Do not print to stdout')
+    .option('--context <mode>', 'Template context: client | source | auto (default: auto)')
     .action((options: CiTemplatesOptions) => {
       ciTemplatesCommand(options);
     });
