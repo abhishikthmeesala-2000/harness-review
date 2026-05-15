@@ -238,8 +238,25 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install engagement-harness
-        run: npm install -g engagement-harness
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Clone Engagement Harness
+        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+
+      - name: Build Engagement Harness
+        run: |
+          cd /tmp/harness-review
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Install CLI
+        run: |
+          echo '#!/bin/sh' | sudo tee /usr/local/bin/engagement-harness
+          echo 'exec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"' | sudo tee -a /usr/local/bin/engagement-harness
+          sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Collect feedback from reactions
         env:
