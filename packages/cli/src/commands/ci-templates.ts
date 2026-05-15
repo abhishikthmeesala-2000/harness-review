@@ -41,16 +41,19 @@ jobs:
           node-version: '20'
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
 
       - name: Clone and build engagement-harness
         run: |
           git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
           cd /tmp/harness-review
-          pnpm install
+          pnpm install --frozen-lockfile
           pnpm build
           cd packages/cli
-          pnpm link --global
+          npm pack
+          npm install -g ./engagement-harness-*.tgz
 
       - name: Run review
         env:
