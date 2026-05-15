@@ -40,6 +40,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Fetch base branch
+        run: git fetch origin \${{ github.base_ref }}:\${{ github.base_ref }}
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
