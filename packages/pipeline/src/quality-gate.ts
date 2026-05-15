@@ -18,8 +18,10 @@ export const QualityGate = {
     const passed: Finding[] = [];
     const failed: Finding[] = [];
 
+    const requireVerifier = config.review.requireVerifierApproval ?? true;
+
     for (const f of findings) {
-      if (f.verification.status === 'rejected') {
+      if (requireVerifier && f.verification.status === 'rejected') {
         failed.push(f);
         continue;
       }
