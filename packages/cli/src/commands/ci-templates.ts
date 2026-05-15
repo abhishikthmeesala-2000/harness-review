@@ -45,20 +45,25 @@ jobs:
         with:
           version: 10
 
-      - name: Clone and build engagement-harness
+      - name: Clone Engagement Harness
+        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+
+      - name: Build Engagement Harness
         run: |
-          git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
           cd /tmp/harness-review
           pnpm install --frozen-lockfile
           pnpm build
-          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' \
-            | sudo tee /usr/local/bin/engagement-harness > /dev/null
+
+      - name: Install CLI
+        run: |
+          echo '#!/bin/sh' | sudo tee /usr/local/bin/engagement-harness
+          echo 'exec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"' | sudo tee -a /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Run review
         env:
-          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
           GITHUB_PR_NUMBER: \${{ github.event.pull_request.number }}
           GITHUB_REPOSITORY: \${{ github.repository }}
           GITHUB_PR_TITLE: \${{ github.event.pull_request.title }}
