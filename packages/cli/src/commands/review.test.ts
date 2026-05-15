@@ -84,7 +84,7 @@ describe('buildInlineCommentBody', () => {
     expect(body).toContain('**React to provide feedback:**');
     expect(body).toContain('👍 Accepted (will fix)');
     expect(body).toContain('👎 False positive');
-    expect(body).toContain('✅ Already fixed');
+    expect(body).toContain('🚀 Already fixed');
     expect(body).toContain('😕 Dismissed');
   });
 

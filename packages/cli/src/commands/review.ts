@@ -68,7 +68,7 @@ export function buildInlineCommentBody(
     '',
     `---`,
     `**React to provide feedback:**  `,
-    `👍 Accepted (will fix) | 👎 False positive | ✅ Already fixed | 😕 Dismissed`,
+    `👍 Accepted (will fix) | 👎 False positive | 🚀 Already fixed | 😕 Dismissed`,
     '',
     `<!-- eh-metadata: findingId=${f.id} runId=${runId} -->`,
   ].join('\n');

@@ -163,7 +163,7 @@ describe('generateGithubWorkflow', () => {
   it('returns client template when not in source repo', () => {
     const result = generateGithubWorkflow(dir);
     expect(result).toContain('harness-review');
-    expect(result).toContain('pnpm link --global');
+    expect(result).toContain('Install CLI');
   });
 
   it('returns source template when in source repo', () => {
