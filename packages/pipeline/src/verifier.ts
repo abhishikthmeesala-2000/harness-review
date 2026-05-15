@@ -27,11 +27,13 @@ function hasGenericFix(suggestedFix: string): boolean {
 function hasDiffEvidence(finding: CandidateFinding, diffLines: string[]): boolean {
   const diffItems = finding.evidence.filter((e) => e.type === 'diff');
   if (diffItems.length === 0) return true; // non-diff evidence types don't trigger this check
-  return diffItems.some((e) =>
-    diffLines.some(
-      (line) => line.length >= STRONG_MIN_LENGTH && e.content.includes(line),
-    ),
-  );
+  return diffItems.some((e) => {
+    const ec = e.content.trim();
+    return diffLines.some((line) => {
+      const lc = line.trim();
+      return lc.length >= STRONG_MIN_LENGTH && (ec.includes(lc) || lc.includes(ec));
+    });
+  });
 }
 
 function reject(finding: CandidateFinding, reason: string): CandidateFinding {
