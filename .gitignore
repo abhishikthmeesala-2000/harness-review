@@ -7,4 +7,3 @@ dist/
 .DS_Store
 coverage/
 examples/eval-report-*.json
-.github/workflows/engagement-harness.yml
