@@ -51,9 +51,9 @@ jobs:
           cd /tmp/harness-review
           pnpm install --frozen-lockfile
           pnpm build
-          cd packages/cli
-          npm pack
-          npm install -g ./engagement-harness-*.tgz
+          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' \
+            | sudo tee /usr/local/bin/engagement-harness > /dev/null
+          sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Run review
         env:
