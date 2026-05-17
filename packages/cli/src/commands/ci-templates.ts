@@ -33,12 +33,28 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install engagement-harness
-        run: npm install -g engagement-harness
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Clone and build engagement-harness
+        run: |
+          git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+          cd /tmp/harness
+          pnpm install
+          pnpm build
+          cd packages/cli
+          sed -i '/"private": true,/d' package.json
+          pnpm link --global
+
+      - name: Fetch base branch
+        run: git fetch origin main:main
 
       - name: Run review
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_PR_NUMBER: \${{ github.event.pull_request.number }}
           GITHUB_REPOSITORY: \${{ github.repository }}
           GITHUB_PR_TITLE: \${{ github.event.pull_request.title }}
