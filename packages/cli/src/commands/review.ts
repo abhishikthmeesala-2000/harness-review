@@ -50,7 +50,10 @@ function resolveCommitSha(repoRoot: string, ref: string): string {
   }
 }
 
-export function buildInlineCommentBody(f: { title: string; severity: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number }): string {
+export function buildInlineCommentBody(
+  f: { title: string; severity: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number; id: string },
+  runId: string,
+): string {
   const pct = f.confidence !== undefined ? ` · confidence: ${Math.round(f.confidence * 100)}%` : '';
   return [
     `### [${f.severity.toUpperCase()}] ${f.title}`,
@@ -62,6 +65,12 @@ export function buildInlineCommentBody(f: { title: string; severity: string; why
     '',
     `---`,
     `*Engagement Harness · agent: \`${f.sourceAgent}\`${pct}*`,
+    '',
+    `---`,
+    `**React to provide feedback:**  `,
+    `👍 Accepted (will fix) | 👎 False positive | 🚀 Already fixed | 😕 Dismissed`,
+    '',
+    `<!-- eh-metadata: findingId=${f.id} runId=${runId} -->`,
   ].join('\n');
 }
 
@@ -148,7 +157,7 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
         const commitSha = resolveCommitSha(repoRoot, headRef);
         // Post each finding as an inline PR comment
         for (const finding of result.published) {
-          const body = buildInlineCommentBody(finding);
+          const body = buildInlineCommentBody(finding, runId);
           await alm.postInlineComment(prRef, commitSha, finding.file, finding.lineEnd, body);
         }
         // Post overall summary as a single PR comment

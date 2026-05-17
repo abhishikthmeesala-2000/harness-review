@@ -222,7 +222,13 @@ describe('FindingPipeline.process', () => {
       good('E2E-11', 15, 'medium'),
     ];
 
-    const result = await FindingPipeline.process(candidates, makeBundle(), makeConfig({ confidenceThreshold: 0.3 }));
+    // requireVerifierApproval: true so bad candidates (generic fix) are blocked by verifier
+    const config = ConfigSchema.parse({
+      client: { name: 'TestCo', engagement: 'Pilot' },
+      review: { confidenceThreshold: 0.3, severityThreshold: 'low', requireVerifierApproval: true },
+      ci: { blockOnPolicy: false },
+    });
+    const result = await FindingPipeline.process(candidates, makeBundle(), config);
 
     // 5 bad ones should be verifier-rejected
     const verifierRejected = result.rejected.filter((r) => r.stage === 'verifier');

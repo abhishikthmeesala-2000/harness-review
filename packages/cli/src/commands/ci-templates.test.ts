@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ciTemplatesCommand } from './ci-templates.js';
+import { ciTemplatesCommand, generateGithubWorkflow, isSourceRepo } from './ci-templates.js';
 
 describe('ciTemplatesCommand', () => {
   let dir: string;
@@ -41,6 +41,23 @@ describe('ciTemplatesCommand', () => {
         'utf8',
       );
       expect(content).toContain('name: Engagement Harness Review');
+    });
+
+    it('also writes feedback-collection.yml alongside engagement-harness.yml', () => {
+      ciTemplatesCommand({ platform: 'github' });
+      const content = readFileSync(
+        path.join(dir, '.github', 'workflows', 'feedback-collection.yml'),
+        'utf8',
+      );
+      expect(content).toContain('name: Collect Feedback from Reactions');
+      expect(content).toContain('feedback collect');
+      expect(content).toContain('cron:');
+      // checkout must carry token so git push is authorised
+      expect(content).toContain('token:');
+      // git add must not fail on first run when feedback dir absent
+      expect(content).toContain('2>/dev/null || true');
+      // push must be explicit about remote + ref
+      expect(content).toContain('git push origin HEAD');
     });
 
     it('prints to stdout when write is explicitly false (programmatic override)', () => {
@@ -106,5 +123,62 @@ describe('ciTemplatesCommand', () => {
       exitSpy.mockRestore();
       errSpy.mockRestore();
     });
+  });
+});
+
+describe('isSourceRepo', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'eh-src-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns true when packages/cli/package.json exists', () => {
+    const cliDir = path.join(dir, 'packages', 'cli');
+    mkdirSync(cliDir, { recursive: true });
+    writeFileSync(path.join(cliDir, 'package.json'), '{}', 'utf8');
+    expect(isSourceRepo(dir)).toBe(true);
+  });
+
+  it('returns false in a regular client repo', () => {
+    expect(isSourceRepo(dir)).toBe(false);
+  });
+});
+
+describe('generateGithubWorkflow', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(tmpdir(), 'eh-wf-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns client template when not in source repo', () => {
+    const result = generateGithubWorkflow(dir);
+    expect(result).toContain('harness-review');
+    expect(result).toContain('Install CLI');
+  });
+
+  it('returns source template when in source repo', () => {
+    const cliDir = path.join(dir, 'packages', 'cli');
+    mkdirSync(cliDir, { recursive: true });
+    writeFileSync(path.join(cliDir, 'package.json'), '{}', 'utf8');
+    const result = generateGithubWorkflow(dir);
+    expect(result).toContain('packages/cli');
+    expect(result).not.toContain('harness-review.git');
+  });
+
+  it('client template contains required env vars', () => {
+    const result = generateGithubWorkflow(dir);
+    expect(result).toContain('ANTHROPIC_API_KEY');
+    expect(result).toContain('GITHUB_TOKEN');
+    expect(result).toContain('actions/checkout@v4');
   });
 });

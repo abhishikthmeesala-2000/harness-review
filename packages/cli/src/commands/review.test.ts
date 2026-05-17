@@ -43,38 +43,54 @@ function createFixtureRepo(configOverride?: object): string {
 
 describe('buildInlineCommentBody', () => {
   const base = {
+    id: 'EH-0042',
     title: 'SQL injection risk',
     severity: 'high',
     whyItMatters: 'Attacker can exfiltrate data.',
     suggestedFix: 'Use parameterised queries.',
     sourceAgent: 'security',
   };
+  const RUN_ID = 'run-2026-05-12T00-00-00Z';
 
   it('includes severity header', () => {
-    const body = buildInlineCommentBody(base);
+    const body = buildInlineCommentBody(base, RUN_ID);
     expect(body).toContain('### [HIGH] SQL injection risk');
   });
 
   it('includes why it matters and suggested fix', () => {
-    const body = buildInlineCommentBody(base);
+    const body = buildInlineCommentBody(base, RUN_ID);
     expect(body).toContain('**Why it matters:** Attacker can exfiltrate data.');
     expect(body).toContain('**Suggested fix:**');
     expect(body).toContain('Use parameterised queries.');
   });
 
   it('includes agent name in footer', () => {
-    const body = buildInlineCommentBody(base);
+    const body = buildInlineCommentBody(base, RUN_ID);
     expect(body).toContain('`security`');
   });
 
   it('includes confidence percentage when provided', () => {
-    const body = buildInlineCommentBody({ ...base, confidence: 0.87 });
+    const body = buildInlineCommentBody({ ...base, confidence: 0.87 }, RUN_ID);
     expect(body).toContain('confidence: 87%');
   });
 
   it('omits confidence line when not provided', () => {
-    const body = buildInlineCommentBody(base);
+    const body = buildInlineCommentBody(base, RUN_ID);
     expect(body).not.toContain('confidence:');
+  });
+
+  it('includes reaction footer', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('**React to provide feedback:**');
+    expect(body).toContain('👍 Accepted (will fix)');
+    expect(body).toContain('👎 False positive');
+    expect(body).toContain('🚀 Already fixed');
+    expect(body).toContain('😕 Dismissed');
+  });
+
+  it('embeds machine-readable metadata comment', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('<!-- eh-metadata: findingId=EH-0042 runId=run-2026-05-12T00-00-00Z -->');
   });
 });
 
