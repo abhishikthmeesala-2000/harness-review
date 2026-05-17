@@ -84,7 +84,11 @@ export function buildConfigFromAnswers(answers: InitAnswers): Config {
       severityThreshold: answers.severityThreshold,
     },
     agents: { enabled: answers.enabledAgents },
-    models: Object.fromEntries(answers.enabledAgents.map((id) => [id, 'mock'])),
+    models: Object.fromEntries(answers.enabledAgents.map((id) => [id, 'anthropic'])),
+    providers: {
+      mock: {},
+      anthropic: { model: 'claude-haiku-4-5-20251001' },
+    },
     context: { ...base.context, ignoredPaths: answers.ignoredPaths },
     ci: { ...base.ci, blockOnPolicy: answers.blockOnPolicy, postComments: answers.postComments },
     alm: { platform: answers.almPlatform },
