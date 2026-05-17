@@ -36,8 +36,9 @@ describe('buildConfigFromAnswers', () => {
     expect(config.context.ignoredPaths).toEqual(['**/node_modules/**']);
     expect(config.agents.enabled.length).toBeGreaterThan(0);
     for (const id of config.agents.enabled) {
-      expect(config.models[id]).toBe('mock');
+      expect(config.models[id]).toBe('anthropic');
     }
+    expect(config.providers.anthropic).toEqual({ model: 'claude-haiku-4-5-20251001' });
   });
 });
 
