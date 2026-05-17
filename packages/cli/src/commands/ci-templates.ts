@@ -59,7 +59,7 @@ jobs:
 
       - name: Install CLI
         run: |
-          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
+          printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Run review
@@ -152,7 +152,7 @@ engagement-harness-review:
     - npm install -g pnpm
     - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
     - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
-    - printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
+    - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
     - cd $CI_PROJECT_DIR
     - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
     - ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY engagement-harness review --ci
@@ -190,7 +190,7 @@ steps:
       cd /tmp/harness-review
       pnpm install --frozen-lockfile
       pnpm build
-      printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
+      printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' | sudo tee /usr/local/bin/engagement-harness
       sudo chmod +x /usr/local/bin/engagement-harness
     displayName: 'Build and install engagement-harness'
 
@@ -223,7 +223,7 @@ pipelines:
             - npm install -g pnpm
             - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
             - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
-            - printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
+            - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
             - cd $BITBUCKET_CLONE_DIR
             - git fetch origin $BITBUCKET_PR_DESTINATION_BRANCH:$BITBUCKET_PR_DESTINATION_BRANCH
             - engagement-harness review --ci
@@ -277,7 +277,7 @@ jobs:
 
       - name: Install CLI
         run: |
-          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
+          printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Collect feedback from reactions
