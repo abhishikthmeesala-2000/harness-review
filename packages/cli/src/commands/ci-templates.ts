@@ -59,8 +59,7 @@ jobs:
 
       - name: Install CLI
         run: |
-          echo '#!/bin/sh' | sudo tee /usr/local/bin/engagement-harness
-          echo 'exec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"' | sudo tee -a /usr/local/bin/engagement-harness
+          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Run review
@@ -278,8 +277,7 @@ jobs:
 
       - name: Install CLI
         run: |
-          echo '#!/bin/sh' | sudo tee /usr/local/bin/engagement-harness
-          echo 'exec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"' | sudo tee -a /usr/local/bin/engagement-harness
+          printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Collect feedback from reactions
