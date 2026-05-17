@@ -150,8 +150,13 @@ engagement-harness-review:
     GITHUB_PR_NUMBER: '$CI_MERGE_REQUEST_IID'
     GITHUB_REPOSITORY: '$CI_PROJECT_PATH'
   script:
-    - npm install -g engagement-harness
-    - engagement-harness review --ci
+    - npm install -g pnpm
+    - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+    - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
+    - printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$$@"\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
+    - cd $CI_PROJECT_DIR
+    - git fetch origin $CI_MERGE_REQUEST_TARGET_BRANCH_NAME:$CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY engagement-harness review --ci
   artifacts:
     when: always
     paths:
@@ -178,12 +183,24 @@ steps:
       versionSpec: '20.x'
     displayName: 'Install Node.js 20'
 
-  - script: npm install -g engagement-harness
-    displayName: 'Install engagement-harness'
+  - script: npm install -g pnpm
+    displayName: 'Install pnpm'
 
-  - script: engagement-harness review --ci
+  - script: |
+      git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+      cd /tmp/harness-review
+      pnpm install --frozen-lockfile
+      pnpm build
+      printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' | sudo tee /usr/local/bin/engagement-harness
+      sudo chmod +x /usr/local/bin/engagement-harness
+    displayName: 'Build and install engagement-harness'
+
+  - script: |
+      git fetch origin $(System.PullRequest.TargetBranch):$(System.PullRequest.TargetBranch)
+      engagement-harness review --ci
     displayName: 'Run engagement-harness review'
     env:
+      ANTHROPIC_API_KEY: $(ANTHROPIC_API_KEY)
       GITHUB_PR_NUMBER: $(System.PullRequest.PullRequestNumber)
       GITHUB_REPOSITORY: $(Build.Repository.Name)
 
@@ -204,8 +221,15 @@ pipelines:
           name: Engagement Harness Review
           image: node:20
           script:
-            - npm install -g engagement-harness
+            - npm install -g pnpm
+            - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+            - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
+            - printf '#!/bin/sh\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
+            - cd $BITBUCKET_CLONE_DIR
+            - git fetch origin $BITBUCKET_PR_DESTINATION_BRANCH:$BITBUCKET_PR_DESTINATION_BRANCH
             - engagement-harness review --ci
+          variables:
+            ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
           artifacts:
             - .engagement-harness/reports/**
 `;
