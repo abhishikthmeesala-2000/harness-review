@@ -107,6 +107,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Fetch base branch
+        run: git fetch origin \${{ github.base_ref }}:\${{ github.base_ref }}
+
       - name: Install pnpm
         run: npm install -g pnpm
 
@@ -118,6 +121,7 @@ jobs:
       - name: Link CLI globally
         run: |
           cd packages/cli
+          sed -i '/"private": true,/d' package.json
           pnpm link --global
 
       - name: Run review
