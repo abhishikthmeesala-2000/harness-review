@@ -105,7 +105,7 @@ export function defaultAnswersFromProfile(cwd: string, profile: RepoProfile): In
     severityThreshold: 'low',
     ignoredPaths: profile.suggestedIgnoredPaths,
     blockOnPolicy: false,
-    postComments: false,
+    postComments: true,
   };
 }
 

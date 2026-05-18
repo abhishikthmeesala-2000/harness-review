@@ -12,7 +12,7 @@ const validBase = {
   models: { reviewer: 'mock' },
   providers: { mock: {} },
   context: { ignoredPaths: [], maxFiles: 30, maxTokens: 80000 },
-  ci: { blockOnPolicy: false, postComments: false, artifactsOnly: true },
+  ci: { blockOnPolicy: false, postComments: true, artifactsOnly: true },
   alm: { platform: 'none' as const },
   feedback: { enabled: true },
   reports: {
@@ -38,7 +38,7 @@ describe('ConfigSchema', () => {
     expect(parsed.context.maxFiles).toBe(30);
     expect(parsed.context.maxTokens).toBe(80000);
     expect(parsed.ci.blockOnPolicy).toBe(false);
-    expect(parsed.ci.postComments).toBe(false);
+    expect(parsed.ci.postComments).toBe(true);
     expect(parsed.ci.artifactsOnly).toBe(true);
     expect(parsed.alm.platform).toBe('none');
     expect(parsed.reports.formats).toEqual(['json', 'markdown', 'html']);
