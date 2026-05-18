@@ -260,8 +260,8 @@ async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<
       : await confirm({ message: 'Commit the workflow file to Git?', default: true });
 
     if (commitConfirmed) {
-      execSync('git add .github/workflows/', { cwd, stdio: 'pipe' });
-      execSync('git commit -m "ci: add Engagement Harness review workflow"', { cwd, stdio: 'pipe' });
+      execSync('git add .github/workflows/ .engagement-harness/', { cwd, stdio: 'pipe' });
+      execSync('git commit -m "ci: add Engagement Harness config and workflow"', { cwd, stdio: 'pipe' });
       console.log(chalk.green('✓') + ' Changes committed');
     }
 
