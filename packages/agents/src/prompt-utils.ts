@@ -1,6 +1,7 @@
-import type { FileDiff } from '@engagement-harness/core';
+import type { ContextEntry, FileDiff } from '@engagement-harness/core';
 
 const MAX_LINES_PER_FILE = 50;
+const MAX_LINES_PER_CONTEXT_FILE = 150;
 
 /**
  * A concrete JSON example of the exact CandidateFinding shape expected by
@@ -32,6 +33,106 @@ export const FINDING_SCHEMA_BLOCK = `Return ONLY a JSON array. Each element must
   }
 ]
 Return [] if you find nothing worth flagging. Do NOT wrap in markdown fences.`;
+
+export function renderFileContext(entries: ContextEntry[]): string {
+  const fileEntries = entries.filter(
+    (e) =>
+      e.kind === 'changed-file' ||
+      e.kind === 'imports' ||
+      e.kind === 'imported-by' ||
+      e.kind === 'test',
+  );
+  if (fileEntries.length === 0) return '(no file context available)';
+  return fileEntries
+    .map((e) => {
+      const lines = e.content.split('\n');
+      const truncated = lines.length > MAX_LINES_PER_CONTEXT_FILE;
+      const body = lines.slice(0, MAX_LINES_PER_CONTEXT_FILE).join('\n');
+      return `### ${e.path} [${e.kind}]\n\`\`\`\n${body}${truncated ? '\n… (truncated)' : ''}\n\`\`\``;
+    })
+    .join('\n\n');
+}
+
+const MAX_FUNC_LINES = 80;
+
+// Matches the start of a function/method declaration in TS/JS.
+const FUNC_START_RE =
+  /^\s*(export\s+)?(default\s+)?(async\s+)?function[\s*]\w+|^\s*(export\s+)?(const|let|var)\s+\w+\s*=\s*(async\s+)?\(|^\s*(public|private|protected|static|\s)*(async\s+)?\w+\s*\([^)]*\)\s*(:\s*\S+\s*)?\{/;
+
+function extractContainingFunction(
+  lines: string[],
+  targetLine: number, // 1-based
+): { startLine: number; endLine: number; body: string } | null {
+  const idx = Math.min(targetLine - 1, lines.length - 1);
+
+  let startIdx = -1;
+  for (let i = idx; i >= 0; i--) {
+    if (FUNC_START_RE.test(lines[i])) {
+      startIdx = i;
+      break;
+    }
+  }
+  if (startIdx === -1) return null;
+
+  let depth = 0;
+  let endIdx = startIdx;
+  outer: for (let i = startIdx; i < lines.length; i++) {
+    for (const ch of lines[i]) {
+      if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          endIdx = i;
+          break outer;
+        }
+      }
+    }
+  }
+
+  const actualEnd = Math.min(endIdx, startIdx + MAX_FUNC_LINES - 1);
+  return {
+    startLine: startIdx + 1,
+    endLine: actualEnd + 1,
+    body: lines.slice(startIdx, actualEnd + 1).join('\n'),
+  };
+}
+
+/**
+ * For each changed hunk, extract the containing function/method body from
+ * full file context. Uses bracket-counting heuristics — no AST dependency.
+ */
+export function renderFunctionContext(diff: FileDiff[], entries: ContextEntry[]): string {
+  const fileLines = new Map<string, string[]>();
+  for (const e of entries) {
+    if (e.kind === 'changed-file') {
+      fileLines.set(e.path, e.content.split('\n'));
+    }
+  }
+
+  const sections: string[] = [];
+  const seen = new Set<string>();
+
+  for (const file of diff) {
+    const lines = fileLines.get(file.path);
+    if (!lines) continue;
+
+    for (const hunk of file.hunks) {
+      const func = extractContainingFunction(lines, hunk.newStart);
+      if (!func) continue;
+
+      // Deduplicate: same function hit by multiple hunks in same file
+      const dedupKey = `${file.path}:${func.startLine}`;
+      if (seen.has(dedupKey)) continue;
+      seen.add(dedupKey);
+
+      sections.push(
+        `### ${file.path} lines ${func.startLine}–${func.endLine}\n\`\`\`\n${func.body}\n\`\`\``,
+      );
+    }
+  }
+
+  return sections.length > 0 ? sections.join('\n\n') : '(no function context extracted)';
+}
 
 export function renderDiffSummary(diff: FileDiff[]): string {
   if (diff.length === 0) return '(no changed files)';
