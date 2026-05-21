@@ -67,7 +67,7 @@ function extractContainingFunction(
 
   let startIdx = -1;
   for (let i = idx; i >= 0; i--) {
-    if (FUNC_START_RE.test(lines[i])) {
+    if (FUNC_START_RE.test(lines[i] ?? '')) {
       startIdx = i;
       break;
     }
@@ -77,7 +77,7 @@ function extractContainingFunction(
   let depth = 0;
   let endIdx = startIdx;
   outer: for (let i = startIdx; i < lines.length; i++) {
-    for (const ch of lines[i]) {
+    for (const ch of lines[i] ?? '') {
       if (ch === '{') depth++;
       else if (ch === '}') {
         depth--;
