@@ -75,9 +75,35 @@ function extractContainingFunction(
   if (startIdx === -1) return null;
 
   let depth = 0;
-  let endIdx = startIdx;
+  let endIdx = -1;
+  // State machine skips string literals and comments so braces inside them
+  // don't corrupt the depth counter.
+  let inLineComment = false;
+  let inBlockComment = false;
+  let stringChar: string | null = null;
+
   outer: for (let i = startIdx; i < lines.length; i++) {
-    for (const ch of lines[i] ?? '') {
+    const line = lines[i] ?? '';
+    inLineComment = false; // reset per line — line comments don't span lines
+    for (let j = 0; j < line.length; j++) {
+      const ch = line[j] ?? '';
+      const next = line[j + 1] ?? '';
+
+      if (inBlockComment) {
+        if (ch === '*' && next === '/') { inBlockComment = false; j++; }
+        continue;
+      }
+      if (inLineComment) continue;
+      if (stringChar !== null) {
+        if (ch === '\\') { j++; continue; } // escaped char
+        if (ch === stringChar) stringChar = null;
+        continue;
+      }
+
+      if (ch === '/' && next === '/') { inLineComment = true; continue; }
+      if (ch === '/' && next === '*') { inBlockComment = true; j++; continue; }
+      if (ch === '"' || ch === "'" || ch === '`') { stringChar = ch; continue; }
+
       if (ch === '{') depth++;
       else if (ch === '}') {
         depth--;
@@ -88,6 +114,8 @@ function extractContainingFunction(
       }
     }
   }
+
+  if (endIdx === -1) return null; // no matching closing brace found
 
   const actualEnd = Math.min(endIdx, startIdx + MAX_FUNC_LINES - 1);
   return {
