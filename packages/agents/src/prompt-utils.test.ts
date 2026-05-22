@@ -77,6 +77,31 @@ describe('renderFunctionContext', () => {
     expect(result).toBe('(no function context extracted)');
   });
 
+  it('handles string literals containing braces without corrupting depth', () => {
+    const content = [
+      'export function buildQuery(id: number) {',
+      "  const tpl = \"SELECT * FROM t WHERE x IN ('{', '}') \";",
+      '  // comment with { brace and } brace',
+      '  return tpl + id;',
+      '}',
+    ].join('\n');
+
+    const diff = [makeFileDiff('src/q.ts', 4)];
+    const entries = [makeEntry('src/q.ts', content)];
+    const result = renderFunctionContext(diff, entries);
+
+    expect(result).toContain('buildQuery');
+    expect(result).toContain('return tpl');
+  });
+
+  it('returns null (placeholder) when function has no closing brace', () => {
+    const content = 'export function broken() {\n  const x = 1;\n'; // no closing }
+    const diff = [makeFileDiff('src/broken.ts', 2)];
+    const entries = [makeEntry('src/broken.ts', content)];
+    const result = renderFunctionContext(diff, entries);
+    expect(result).toBe('(no function context extracted)');
+  });
+
   it('caps function body at 80 lines for a very long function', () => {
     const lines = ['export function huge() {'];
     for (let i = 0; i < 200; i++) lines.push(`  const x${i} = ${i};`);
