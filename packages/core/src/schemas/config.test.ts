@@ -135,7 +135,7 @@ describe('defaultConfig', () => {
     const c = defaultConfig({ name: 'Acme', engagement: 'Pilot' });
     expect(c.agents.enabled).toEqual([...DEFAULT_AGENT_IDS]);
     for (const id of DEFAULT_AGENT_IDS) {
-      expect(c.models[id]).toBe('mock');
+      expect(c.models[id]).toBe('anthropic');
     }
   });
 
