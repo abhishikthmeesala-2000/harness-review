@@ -111,6 +111,10 @@ export function defaultConfig(client: { name: string; engagement: string }): Con
   return ConfigSchema.parse({
     client,
     agents: { enabled: [...DEFAULT_AGENT_IDS] },
-    models: Object.fromEntries(DEFAULT_AGENT_IDS.map((id) => [id, 'mock'])),
+    models: Object.fromEntries(DEFAULT_AGENT_IDS.map((id) => [id, 'anthropic'])),
+    providers: {
+      mock: {},
+      anthropic: { model: 'claude-sonnet-4-6' },
+    },
   });
 }
