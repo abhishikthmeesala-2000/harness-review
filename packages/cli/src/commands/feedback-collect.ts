@@ -1,14 +1,15 @@
-import { writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { FeedbackImporter } from '@engagement-harness/eval';
+import { FeedbackImporter, type MetricsSummary } from '@engagement-harness/eval';
 import chalk from 'chalk';
 
 export interface FeedbackCollectOptions {
   repo: string;
   pr?: number;
   since?: string;
+  memoryDir?: string;
 }
 
 interface GitHubComment {
@@ -96,7 +97,7 @@ export async function feedbackCollectCommand(options: FeedbackCollectOptions): P
   } else {
     try {
       const pulls = await ghFetch<GitHubPull[]>(
-        `${base}/pulls?state=open&per_page=100`,
+        `${base}/pulls?state=all&per_page=100`,
         token,
       );
       prNumbers = pulls
@@ -199,4 +200,59 @@ export async function feedbackCollectCommand(options: FeedbackCollectOptions): P
   for (const [state, count] of Object.entries(counts)) {
     console.log(`  ${state}: ${count}`);
   }
+
+  if (options.memoryDir) {
+    writeMemoryFile(options.memoryDir, counts, entries.length);
+    console.log(chalk.dim(`  memory → ${options.memoryDir}/feedback_pr_reactions.md`));
+  }
+}
+
+function writeMemoryFile(
+  memoryDir: string,
+  deltaCounts: Record<string, number>,
+  deltaTotal: number,
+): void {
+  const metricsFile = join(process.cwd(), '.engagement-harness/feedback/metrics.json');
+  let totalLine = `Delta this run: ${deltaTotal} entries`;
+
+  if (existsSync(metricsFile)) {
+    const metrics = JSON.parse(readFileSync(metricsFile, 'utf8')) as MetricsSummary;
+    const stateLines = Object.entries(metrics.byState)
+      .filter(([, n]) => n > 0)
+      .map(([s, n]) => `- ${s}: ${n}`)
+      .join('\n');
+    totalLine = `Cumulative totals (${metrics.totalEntries} entries):\n${stateLines}`;
+  }
+
+  const deltaLines = Object.entries(deltaCounts)
+    .map(([s, n]) => `- ${s}: ${n}`)
+    .join('\n');
+
+  const falsePositiveCount = deltaCounts['false_positive'] ?? 0;
+  const acceptedCount = deltaCounts['accepted'] ?? 0;
+  const fpNote =
+    falsePositiveCount > acceptedCount
+      ? '\n**Signal:** false_positive > accepted this run — consider tightening confidence/severity thresholds in config.'
+      : '';
+
+  const body = `---
+name: feedback-pr-reactions-summary
+description: Aggregate feedback from GitHub PR comment reactions — acceptance/rejection patterns for engagement-harness findings
+metadata:
+  type: project
+---
+
+Last collected: ${new Date().toISOString()}
+
+${totalLine}
+
+This run delta:
+${deltaLines}${fpNote}
+
+**Why:** Collected automatically from GitHub PR comment reactions (👍=accepted, 👎=false_positive, 🚀=fixed, 😕=dismissed).
+**How to apply:** High false_positive rate signals overly permissive quality gate — tune \`review.confidenceThreshold\` or \`review.severityThreshold\` in \`.engagement-harness/config.json\`.
+`;
+
+  if (!existsSync(memoryDir)) mkdirSync(memoryDir, { recursive: true });
+  writeFileSync(join(memoryDir, 'feedback_pr_reactions.md'), body, 'utf8');
 }

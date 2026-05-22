@@ -133,6 +133,7 @@ export function buildProgram(): Command {
     .requiredOption('--repo <owner/repo>', 'GitHub repository (owner/repo)')
     .option('--pr <number>', 'specific PR number to scan', (v: string) => Number(v))
     .option('--since <date>', 'ISO date or "Xdays" shorthand (default: 7 days ago)')
+    .option('--memory-dir <path>', 'write Claude memory file to this directory after collecting')
     .action(async (options: FeedbackCollectOptions) => {
       await feedbackCollectCommand(options);
     });
