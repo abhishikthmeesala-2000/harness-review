@@ -27,7 +27,11 @@ export async function detectGitPlatform(cwd: string): Promise<string | null> {
 
 export async function getCurrentBranch(cwd: string): Promise<string> {
   try {
-    const result = execSync('git branch --show-current', { cwd, stdio: 'pipe' });
+    const result = execSync('git branch --show-current', {
+      cwd,
+      stdio: 'pipe',
+      env: cleanGitEnv(),
+    });
     return result.toString().trim() || 'main';
   } catch {
     return 'main';
@@ -36,7 +40,11 @@ export async function getCurrentBranch(cwd: string): Promise<string> {
 
 export async function getRemoteUrl(cwd: string): Promise<string | null> {
   try {
-    const result = execSync('git remote get-url origin', { cwd, stdio: 'pipe' });
+    const result = execSync('git remote get-url origin', {
+      cwd,
+      stdio: 'pipe',
+      env: cleanGitEnv(),
+    });
     return result.toString().trim() || null;
   } catch {
     return null;
