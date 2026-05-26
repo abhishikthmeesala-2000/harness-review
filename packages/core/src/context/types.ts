@@ -16,9 +16,15 @@ export interface PrMetadata {
   body?: string;
 }
 
+export interface RunMetadata {
+  runId: string;
+  timestamp: string;
+}
+
 export interface ContextBundle {
   entries: ContextEntry[];
   diff: FileDiff[];
   repoProfile: RepoProfile;
   prMetadata?: PrMetadata;
+  runMetadata?: RunMetadata;
 }

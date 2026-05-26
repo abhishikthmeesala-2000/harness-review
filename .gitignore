@@ -3,7 +3,8 @@ dist/
 *.log
 *.tsbuildinfo
 .engagement-harness/reports/
-.engagement-harness/feedback/
+.engagement-harness/feedback/feedback-*.json
+!.engagement-harness/feedback/metrics.json
 .DS_Store
 coverage/
 examples/eval-report-*.json

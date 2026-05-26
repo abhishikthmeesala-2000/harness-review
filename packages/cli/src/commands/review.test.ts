@@ -88,9 +88,14 @@ describe('buildInlineCommentBody', () => {
     expect(body).toContain('😕 Dismissed');
   });
 
-  it('embeds machine-readable metadata comment', () => {
+  it('embeds machine-readable metadata comment with extended fields', () => {
     const body = buildInlineCommentBody(base, RUN_ID);
-    expect(body).toContain('<!-- eh-metadata: findingId=EH-0042 runId=run-2026-05-12T00-00-00Z -->');
+    expect(body).toContain('<!-- eh-metadata:');
+    expect(body).toContain('findingId=EH-0042');
+    expect(body).toContain('runId=run-2026-05-12T00-00-00Z');
+    expect(body).toContain('sourceAgent=security');
+    expect(body).toContain('severity=high');
+    expect(body).toContain('-->');
   });
 });
 
