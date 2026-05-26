@@ -34,10 +34,11 @@ jobs:
           pnpm install
           pnpm build
 
-      - name: Link CLI
+      - name: Install CLI
         run: |
-          cd /tmp/harness/packages/cli
-          pnpm link --global
+          printf '#!/bin/sh\nexec node /tmp/harness/packages/cli/dist/bin/engagement-harness.js "$@"\n' \
+            | sudo tee /usr/local/bin/engagement-harness
+          sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Weekly collection
         env:
@@ -51,6 +52,11 @@ jobs:
         run: |
           git config user.name "Engagement Harness Bot"
           git config user.email "engagement-harness[bot]@users.noreply.github.com"
-          git add .engagement-harness/feedback/metrics.json
-          git diff --cached --quiet || git commit -m "chore: weekly feedback update"
-          git push origin HEAD:main
+          git add .engagement-harness/feedback/metrics.json 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "No metrics changes to commit."
+          else
+            git commit -m "chore: weekly feedback update"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi

@@ -111,18 +111,18 @@ jobs:
         run: git fetch origin \${{ github.base_ref }}:\${{ github.base_ref }}
 
       - name: Install pnpm
-        run: npm install -g pnpm
+        uses: pnpm/action-setup@v4.1.0
 
       - name: Install and build
         run: |
           pnpm install
           pnpm build
 
-      - name: Link CLI globally
+      - name: Install CLI
         run: |
-          cd packages/cli
-          sed -i '/"private": true,/d' package.json
-          pnpm link --global
+          printf '#!/bin/sh\\nexec node %s/packages/cli/dist/bin/engagement-harness.js "$@"\\n' "$(pwd)" \\
+            | sudo tee /usr/local/bin/engagement-harness
+          sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Run review
         env:
