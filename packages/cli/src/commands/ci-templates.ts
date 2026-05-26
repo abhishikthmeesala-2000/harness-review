@@ -112,8 +112,6 @@ jobs:
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4.1.0
-        with:
-          version: 10
 
       - name: Install and build
         run: |
