@@ -1,0 +1,56 @@
+name: Collect Feedback on Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  collect-if-merged:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - run: corepack enable
+
+      - name: Clone Engagement Harness
+        run: |
+          git clone https://github.com/${{ github.repository_owner }}/harness-review.git /tmp/harness
+
+      - name: Build
+        run: |
+          cd /tmp/harness
+          pnpm install
+          pnpm build
+
+      - name: Link CLI
+        run: |
+          cd /tmp/harness/packages/cli
+          pnpm link --global
+
+      - name: Collect feedback
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          engagement-harness feedback collect \
+            --repo ${{ github.repository }} \
+            --pr ${{ github.event.pull_request.number }}
+
+      - name: Commit metrics
+        run: |
+          git config user.name "Engagement Harness Bot"
+          git config user.email "engagement-harness[bot]@users.noreply.github.com"
+          git add .engagement-harness/feedback/metrics.json
+          git diff --cached --quiet || git commit -m "chore: update feedback from PR #${{ github.event.pull_request.number }}"
+          git push origin HEAD:main

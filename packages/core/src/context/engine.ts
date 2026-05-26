@@ -6,7 +6,7 @@ import micromatch from 'micromatch';
 import type { Config } from '../schemas/config.js';
 import type { FileDiff } from '../git/diff-parser.js';
 import type { RepoProfile } from '../profile/profiler.js';
-import type { ContextBundle, ContextEntry, ContextEntryKind, PrMetadata } from './types.js';
+import type { ContextBundle, ContextEntry, ContextEntryKind, PrMetadata, RunMetadata } from './types.js';
 
 const PRIORITY: Record<ContextEntryKind, number> = {
   'changed-file': 100,
@@ -21,6 +21,7 @@ const PY_EXTENSIONS = ['.py'];
 
 export interface BuildOptions {
   prMetadata?: PrMetadata;
+  runMetadata?: RunMetadata;
 }
 
 interface ResolvedRule {
@@ -151,6 +152,7 @@ export class ContextEngine {
       repoProfile: profile,
     };
     if (options.prMetadata) bundle.prMetadata = options.prMetadata;
+    if (options.runMetadata) bundle.runMetadata = options.runMetadata;
     return bundle;
   }
 }

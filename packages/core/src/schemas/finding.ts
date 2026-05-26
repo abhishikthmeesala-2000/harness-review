@@ -55,6 +55,15 @@ const baseFindingShape = {
   sourceAgent: z.string().min(1, { message: 'sourceAgent is required' }),
   modelProvider: z.string().min(1, { message: 'modelProvider is required' }),
   remediationReadiness: RemediationReadinessSchema,
+  metadata: z
+    .object({
+      runId: z.string().optional(),
+      prNumber: z.number().int().positive().optional(),
+      repository: z.string().optional(),
+      timestamp: z.string().optional(),
+      commentId: z.number().int().positive().optional(),
+    })
+    .optional(),
 };
 
 export const FindingSchema = z

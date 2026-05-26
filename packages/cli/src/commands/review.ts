@@ -12,6 +12,7 @@ import {
   RepoProfiler,
   SecretRedactor,
 } from '@engagement-harness/core';
+import { GitHubCommenter } from '@engagement-harness/ci';
 import { FindingPipeline } from '@engagement-harness/pipeline';
 import { ReportGenerator, ReportWriter } from '@engagement-harness/reports';
 import chalk from 'chalk';
@@ -51,10 +52,17 @@ function resolveCommitSha(repoRoot: string, ref: string): string {
 }
 
 export function buildInlineCommentBody(
-  f: { title: string; severity: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number; id: string },
+  f: { title: string; severity: string; dimension?: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number; id: string },
   runId: string,
 ): string {
   const pct = f.confidence !== undefined ? ` · confidence: ${Math.round(f.confidence * 100)}%` : '';
+  const metaParts = [
+    `findingId=${f.id}`,
+    `runId=${runId}`,
+    `sourceAgent=${f.sourceAgent}`,
+    ...(f.dimension ? [`dimension=${f.dimension}`] : []),
+    `severity=${f.severity}`,
+  ];
   return [
     `### [${f.severity.toUpperCase()}] ${f.title}`,
     '',
@@ -70,7 +78,7 @@ export function buildInlineCommentBody(
     `**React to provide feedback:**  `,
     `👍 Accepted (will fix) | 👎 False positive | 🚀 Already fixed | 😕 Dismissed`,
     '',
-    `<!-- eh-metadata: findingId=${f.id} runId=${runId} -->`,
+    `<!-- eh-metadata: ${metaParts.join(' ')} -->`,
   ].join('\n');
 }
 
@@ -119,10 +127,18 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
 
   console.log(chalk.dim(`[review] base: ${baseRef}  head: ${headRef}`));
 
+  // Generate runId early so it can be threaded through context and finding metadata.
+  const runTimestamp = new Date();
+  const runId = runTimestamp.toISOString().replace(/[:.]/g, '-').slice(0, 19) + 'Z';
+  const runMetadata = { runId, timestamp: runTimestamp.toISOString() };
+
   const diffs = await GitDiffParser.parseDiff(repoRoot, baseRef, headRef);
   const profile = RepoProfiler.detect(repoRoot);
   const prMetadata = prTitle || prBody ? { title: prTitle, body: prBody } : undefined;
-  const rawBundle = ContextEngine.build(diffs, repoRoot, profile, config, { prMetadata });
+  const rawBundle = ContextEngine.build(diffs, repoRoot, profile, config, {
+    prMetadata,
+    runMetadata,
+  });
   const bundle = SecretRedactor.redactBundle(rawBundle);
 
   const orchestrator = new AgentOrchestrator();
@@ -130,10 +146,21 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
 
   const result = await FindingPipeline.process(candidates, bundle, config);
 
+  // Enrich published findings with run/PR metadata for comment traceability.
+  const prNumber = detectPrNumber();
+  const repository = process.env['GITHUB_REPOSITORY'];
+  const publishedWithMeta = result.published.map((f) => ({
+    ...f,
+    metadata: {
+      runId,
+      timestamp: runTimestamp.toISOString(),
+      ...(prNumber !== null ? { prNumber } : {}),
+      ...(repository ? { repository } : {}),
+    },
+  }));
+
   const agentsRun = [...new Set(candidates.map((c) => c.sourceAgent))];
   const providersUsed = [...new Set(candidates.map((c) => c.modelProvider))];
-
-  const runId = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19) + 'Z';
 
   const meta: RunMetadata = {
     runId,
@@ -148,22 +175,34 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   const reports = ReportGenerator.generateAll(result, meta, config);
   ReportWriter.write(reports, path.join(repoRoot, config.reports.outputDir), runId);
 
-  // ALM integration — only when postComments is explicitly enabled
+  // Post finding comments as issue comments (for feedback reaction collection)
+  if (config.ci.postComments && process.env['GITHUB_TOKEN']) {
+    if (prNumber !== null) {
+      try {
+        const ghRepo = process.env['GITHUB_REPOSITORY'] ?? '';
+        const [ghOwner, ghRepoName] = ghRepo.split('/');
+        if (ghOwner && ghRepoName) {
+          const commenter = new GitHubCommenter({
+            token: process.env['GITHUB_TOKEN'],
+            owner: ghOwner,
+            repo: ghRepoName,
+            runId,
+          });
+          await commenter.postFindings(publishedWithMeta, prNumber);
+        }
+      } catch {
+        // never fail the build because of comment errors
+      }
+    }
+  }
+
+  // ALM integration — post summary and support non-GitHub platforms
   if (config.ci.postComments) {
     try {
       const alm = createAlmAdapter(config);
       const prRef = detectPrRef();
-      if (prRef) {
-        const commitSha = resolveCommitSha(repoRoot, headRef);
-        // Post each finding as an inline PR comment
-        for (const finding of result.published) {
-          const body = buildInlineCommentBody(finding, runId);
-          await alm.postInlineComment(prRef, commitSha, finding.file, finding.lineEnd, body);
-        }
-        // Post overall summary as a single PR comment
-        if (reports['markdown']) {
-          await alm.postSummary(prRef, reports['markdown']);
-        }
+      if (prRef && reports['markdown']) {
+        await alm.postSummary(prRef, reports['markdown']);
       }
     } catch {
       // never fail the build because of ALM errors
@@ -181,10 +220,10 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
       `${result.metrics.totalCandidates - result.metrics.publishedCount} rejected`,
   );
 
-  if (result.published.length > 0) {
+  if (publishedWithMeta.length > 0) {
     console.log('');
     console.log(chalk.bold('Top findings:'));
-    const top = result.published.slice(0, 3);
+    const top = publishedWithMeta.slice(0, 3);
     for (const f of top) {
       const colorFn = SEVERITY_COLOR[f.severity] ?? chalk.white;
       console.log(`  ${colorFn(`[${f.severity.toUpperCase()}]`)} ${f.file}:${f.lineStart}  ${f.title}`);
@@ -208,4 +247,11 @@ function detectPrRef(): { owner: string; repo: string; pullNumber: number } | nu
   const [owner, repoName] = repo.split('/');
   if (!owner || !repoName) return null;
   return { owner, repo: repoName, pullNumber: Number(prNum) };
+}
+
+function detectPrNumber(): number | null {
+  const prNum = process.env['GITHUB_PR_NUMBER'] ?? process.env['PR_NUMBER'];
+  if (!prNum) return null;
+  const n = Number(prNum);
+  return Number.isFinite(n) && n > 0 ? n : null;
 }

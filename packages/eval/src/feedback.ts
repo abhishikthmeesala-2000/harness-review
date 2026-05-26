@@ -13,10 +13,18 @@ export const FeedbackEntrySchema = z.object({
 
 export type FeedbackEntry = z.infer<typeof FeedbackEntrySchema>;
 
+export interface AgentMetricsSummary {
+  totalFindings: number;
+  feedback: Record<string, number>;
+  acceptanceRate: number;
+  falsePositiveRate: number;
+}
+
 export interface MetricsSummary {
   lastUpdated: string;
   totalEntries: number;
   byState: Record<string, number>;
+  byAgent: Record<string, AgentMetricsSummary>;
   entries: FeedbackEntry[];
 }
 
@@ -32,6 +40,7 @@ const EMPTY_METRICS: MetricsSummary = {
   lastUpdated: '',
   totalEntries: 0,
   byState: emptyByState(),
+  byAgent: {},
   entries: [],
 };
 
@@ -52,7 +61,7 @@ export class FeedbackImporter {
     const metricsFile = join(repoRoot, METRICS_PATH);
     const metrics: MetricsSummary = existsSync(metricsFile)
       ? (JSON.parse(readFileSync(metricsFile, 'utf8')) as MetricsSummary)
-      : { ...EMPTY_METRICS, byState: emptyByState() };
+      : { ...EMPTY_METRICS, byState: emptyByState(), byAgent: {} };
 
     for (const entry of entries) {
       metrics.entries.push(entry);

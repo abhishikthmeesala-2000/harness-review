@@ -54,17 +54,29 @@ importers:
         specifier: ^4.4.1
         version: 4.4.1
 
+  packages/ci:
+    dependencies:
+      '@engagement-harness/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/cli:
     dependencies:
       '@engagement-harness/agents':
         specifier: workspace:*
         version: link:../agents
+      '@engagement-harness/ci':
+        specifier: workspace:*
+        version: link:../ci
       '@engagement-harness/core':
         specifier: workspace:*
         version: link:../core
       '@engagement-harness/eval':
         specifier: workspace:*
         version: link:../eval
+      '@engagement-harness/feedback':
+        specifier: workspace:*
+        version: link:../feedback
       '@engagement-harness/pipeline':
         specifier: workspace:*
         version: link:../pipeline
@@ -127,6 +139,8 @@ importers:
       '@types/micromatch':
         specifier: ^4.0.9
         version: 4.0.10
+
+  packages/feedback: {}
 
   packages/pipeline:
     dependencies:
