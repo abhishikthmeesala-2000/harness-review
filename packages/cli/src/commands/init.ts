@@ -12,7 +12,7 @@ import {
   type SeverityLevel,
 } from '@engagement-harness/core';
 import chalk from 'chalk';
-import { generateGithubWorkflow } from './ci-templates.js';
+import { generateGithubWorkflow, writeFeedbackWorkflows } from './ci-templates.js';
 import { checkIfGitRepo, detectGitPlatform, getCurrentBranch, getRemoteUrl } from '../utils/git.js';
 import { CliError } from '../utils/errors.js';
 
@@ -148,7 +148,11 @@ function scaffoldDirectoryTree({ cwd, config }: ScaffoldOptions): string[] {
   return written;
 }
 
-const GITIGNORE_ENTRIES = ['.engagement-harness/reports/', '.engagement-harness/feedback/'];
+const GITIGNORE_ENTRIES = [
+  '.engagement-harness/reports/',
+  '.engagement-harness/feedback/feedback-*.json',
+  '!.engagement-harness/feedback/metrics.json',
+];
 
 function ensureGitignoreEntries(cwd: string): void {
   const file = path.join(cwd, '.gitignore');
@@ -254,6 +258,8 @@ async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<
     mkdirSync(workflowDir, { recursive: true });
     writeFileSync(workflowPath, generateGithubWorkflow(cwd), 'utf8');
     console.log(chalk.green('✓') + ' Created .github/workflows/engagement-harness.yml');
+    writeFeedbackWorkflows(workflowDir);
+    console.log(chalk.green('✓') + ' Created feedback collection workflows');
 
     const commitConfirmed = options.yes
       ? true
