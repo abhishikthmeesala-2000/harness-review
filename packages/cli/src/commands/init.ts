@@ -223,12 +223,15 @@ export async function runInit(input: RunInitInput): Promise<{ configPath: string
   log('');
   log(`Next: run ${chalk.cyan('engagement-harness doctor')} to verify the install.`);
 
-  await setupCiWorkflow(cwd, { yes });
+  await setupCiWorkflow(cwd, { yes, config });
 
   return { configPath: ConfigLoader.resolvePath(cwd) };
 }
 
-async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<void> {
+export async function setupCiWorkflow(
+  cwd: string,
+  options: { yes: boolean; config: Config },
+): Promise<void> {
   try {
     const isGit = await checkIfGitRepo(cwd);
     if (!isGit) return;
@@ -252,12 +255,16 @@ async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<
     if (!setupConfirmed) return;
 
     const workflowDir = path.join(cwd, '.github', 'workflows');
-    const workflowPath = path.join(workflowDir, 'engagement-harness.yml');
     mkdirSync(workflowDir, { recursive: true });
-    writeFileSync(workflowPath, generateGithubWorkflow(cwd), 'utf8');
+    writeFileSync(path.join(workflowDir, 'engagement-harness.yml'), generateGithubWorkflow(cwd), 'utf8');
     console.log(chalk.green('✓') + ' Created .github/workflows/engagement-harness.yml');
-    writeFeedbackWorkflows(workflowDir);
-    console.log(chalk.green('✓') + ' Created feedback collection workflows');
+
+    if (options.config.feedback.enabled) {
+      writeFeedbackWorkflows(workflowDir);
+      console.log(chalk.green('✓') + ' Created feedback collection workflows');
+    } else {
+      console.log(chalk.dim('  (feedback.enabled is false — skipping feedback workflows)'));
+    }
 
     const commitConfirmed = options.yes
       ? true
