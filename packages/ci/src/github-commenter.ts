@@ -30,14 +30,13 @@ export class GitHubCommenter {
   }
 
   formatComment(finding: Finding): string {
-    const parts: string[] = [
+    const parts = [
       `findingId=${finding.id}`,
       `runId=${this.runId}`,
       `sourceAgent=${finding.sourceAgent}`,
-      `dimension=${finding.dimension}`,
+      ...(finding.dimension ? [`dimension=${finding.dimension}`] : []),
       `severity=${finding.severity}`,
     ];
-    const metadataTag = `<!-- eh-metadata: ${parts.join(' ')} -->`;
 
     const pct =
       finding.confidence !== undefined
@@ -45,8 +44,6 @@ export class GitHubCommenter {
         : '';
 
     return [
-      metadataTag,
-      '',
       `### [${finding.severity.toUpperCase()}] ${finding.title}`,
       '',
       `**Why it matters:** ${finding.whyItMatters}`,
@@ -60,6 +57,8 @@ export class GitHubCommenter {
       `---`,
       `**React to provide feedback:**  `,
       `👍 Accepted (will fix) | 👎 False positive | 🚀 Already fixed | 😕 Dismissed`,
+      '',
+      `<!-- eh-metadata: ${parts.join(' ')} -->`,
     ].join('\n');
   }
 
