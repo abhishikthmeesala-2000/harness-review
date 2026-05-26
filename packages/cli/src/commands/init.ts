@@ -235,14 +235,12 @@ async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<
 
     const platform = await detectGitPlatform(cwd);
 
-    if (platform !== 'github') {
-      if (platform) {
-        console.log(
-          chalk.dim(
-            `  (CI setup not yet supported for ${platform} — run: engagement-harness ci templates --platform ${platform} --write)`,
-          ),
-        );
-      }
+    if (platform !== null && platform !== 'github') {
+      console.log(
+        chalk.dim(
+          `  (CI setup not yet supported for ${platform} — run: engagement-harness ci templates --platform ${platform} --write)`,
+        ),
+      );
       return;
     }
 
