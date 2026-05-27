@@ -12,6 +12,8 @@
     { "path": "../pipeline" },
     { "path": "../reports" },
     { "path": "../providers" },
-    { "path": "../eval" }
+    { "path": "../eval" },
+    { "path": "../feedback" },
+    { "path": "../ci" }
   ]
 }

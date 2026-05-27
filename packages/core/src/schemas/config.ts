@@ -70,8 +70,11 @@ export const ConfigSchema = z
     feedback: z
       .object({
         enabled: z.boolean().default(true),
+        autoCollect: z.boolean().default(false),
+        collectionSchedule: z.string().optional(),
+        retentionDays: z.number().int().positive().optional(),
       })
-      .default({ enabled: true }),
+      .default({ enabled: true, autoCollect: false }),
     reports: z
       .object({
         formats: z
@@ -111,6 +114,10 @@ export function defaultConfig(client: { name: string; engagement: string }): Con
   return ConfigSchema.parse({
     client,
     agents: { enabled: [...DEFAULT_AGENT_IDS] },
-    models: Object.fromEntries(DEFAULT_AGENT_IDS.map((id) => [id, 'mock'])),
+    models: Object.fromEntries(DEFAULT_AGENT_IDS.map((id) => [id, 'anthropic'])),
+    providers: {
+      mock: {},
+      anthropic: { model: 'claude-sonnet-4-6' },
+    },
   });
 }

@@ -16,8 +16,10 @@
   },
   "dependencies": {
     "@engagement-harness/agents": "workspace:*",
+    "@engagement-harness/ci": "workspace:*",
     "@engagement-harness/core": "workspace:*",
     "@engagement-harness/eval": "workspace:*",
+    "@engagement-harness/feedback": "workspace:*",
     "@engagement-harness/pipeline": "workspace:*",
     "@engagement-harness/providers": "workspace:*",
     "@engagement-harness/reports": "workspace:*",

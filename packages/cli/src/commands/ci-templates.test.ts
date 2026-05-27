@@ -43,21 +43,30 @@ describe('ciTemplatesCommand', () => {
       expect(content).toContain('name: Engagement Harness Review');
     });
 
-    it('also writes feedback-collection.yml alongside engagement-harness.yml', () => {
+    it('also writes feedback-on-merge.yml and collect-feedback.yml alongside engagement-harness.yml', () => {
       ciTemplatesCommand({ platform: 'github' });
-      const content = readFileSync(
-        path.join(dir, '.github', 'workflows', 'feedback-collection.yml'),
+
+      const onMerge = readFileSync(
+        path.join(dir, '.github', 'workflows', 'feedback-on-merge.yml'),
         'utf8',
       );
-      expect(content).toContain('name: Collect Feedback from Reactions');
-      expect(content).toContain('feedback collect');
-      expect(content).toContain('cron:');
-      // checkout must carry token so git push is authorised
-      expect(content).toContain('token:');
-      // git add must not fail on first run when feedback dir absent
-      expect(content).toContain('2>/dev/null || true');
-      // push must be explicit about remote + ref
-      expect(content).toContain('git push origin HEAD');
+      expect(onMerge).toContain('name: Collect Feedback on Merge');
+      expect(onMerge).toContain('pull_request.merged == true');
+      expect(onMerge).toContain('--pr');
+      expect(onMerge).toContain('token:');
+      expect(onMerge).toContain('2>/dev/null || true');
+      expect(onMerge).toContain('git push origin HEAD:main');
+
+      const weekly = readFileSync(
+        path.join(dir, '.github', 'workflows', 'collect-feedback.yml'),
+        'utf8',
+      );
+      expect(weekly).toContain('name: Weekly Feedback Sweep');
+      expect(weekly).toContain('--days 7');
+      expect(weekly).toContain('cron:');
+      expect(weekly).toContain('token:');
+      expect(weekly).toContain('2>/dev/null || true');
+      expect(weekly).toContain('git push origin HEAD:main');
     });
 
     it('prints to stdout when write is explicitly false (programmatic override)', () => {
