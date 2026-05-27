@@ -1,0 +1,33 @@
+{
+  "name": "engagement-harness",
+  "version": "0.1.0",
+  "description": "CI-native, multi-agent pull request review platform",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "build": "tsc -b",
+    "build:clean": "tsc -b --clean",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
+    "format": "prettier --write \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.ts\" \"packages/*/bin/**/*.ts\"",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}

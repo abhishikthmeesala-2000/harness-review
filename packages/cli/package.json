@@ -1,0 +1,29 @@
+{
+  "name": "@engagement-harness/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "engagement-harness": "./dist/bin/engagement-harness.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@engagement-harness/agents": "workspace:*",
+    "@engagement-harness/core": "workspace:*",
+    "@engagement-harness/eval": "workspace:*",
+    "@engagement-harness/pipeline": "workspace:*",
+    "@engagement-harness/providers": "workspace:*",
+    "@engagement-harness/reports": "workspace:*",
+    "@inquirer/prompts": "^8.4.2",
+    "chalk": "^5.6.2",
+    "commander": "^12.1.0"
+  }
+}
