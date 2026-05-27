@@ -1,0 +1,24 @@
+# CODEOWNERS
+# Each line is a file pattern followed by one or more owners.
+# These owners will be the default reviewers for PRs that modify those paths.
+
+# Root documentation and configuration
+/README.md                          @abhishikthmeesala-2000
+/CONTRIBUTING.md                    @abhishikthmeesala-2000
+/CHANGELOG.md                       @abhishikthmeesala-2000
+/SECURITY.md                        @abhishikthmeesala-2000
+/docs/                              @abhishikthmeesala-2000
+
+# Core schemas and config — changes here affect every package
+/packages/core/src/schemas/         @abhishikthmeesala-2000
+/packages/core/src/context/         @abhishikthmeesala-2000
+/packages/core/src/redaction/       @abhishikthmeesala-2000
+
+# Agent prompts — changes here affect finding quality
+/packages/agents/src/               @abhishikthmeesala-2000
+
+# Pipeline stages — changes here affect scoring and decisions
+/packages/pipeline/src/             @abhishikthmeesala-2000
+
+# CI workflows
+/.github/workflows/                 @abhishikthmeesala-2000
