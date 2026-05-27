@@ -1,0 +1,12 @@
+diff --git a/src/services/user-service.ts b/src/services/user-service.ts
+index 0000000..4444444 100644
+--- a/src/services/user-service.ts
++++ b/src/services/user-service.ts
+@@ -10,3 +10,8 @@
+ export async function getUserById(id: string): Promise<User | null> {
+   return db.users.findOne({ id });
+ }
++
++export async function updateUserEmail(id: string, email: string): Promise<void> {
++  await db.users.update({ id }, { email });
++}

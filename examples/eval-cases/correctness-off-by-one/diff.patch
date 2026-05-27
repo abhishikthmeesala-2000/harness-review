@@ -1,0 +1,13 @@
+diff --git a/src/utils/range.ts b/src/utils/range.ts
+index 0000000..1111111 100644
+--- a/src/utils/range.ts
++++ b/src/utils/range.ts
+@@ -1,3 +1,9 @@
+ import type { Item } from '../types.js';
+
++const items: Item[] = getItems();
++const result: Item[] = [];
++for (let i = 0; i <= items.length; i++) {
++  result.push(items[i]!);
++}
++export const processed = result;

@@ -1,0 +1,18 @@
+diff --git a/src/payments/charge.ts b/src/payments/charge.ts
+new file mode 100644
+--- /dev/null
++++ b/src/payments/charge.ts
+@@ -0,0 +1,14 @@
++import stripe from '../lib/stripe.js';
++
++export async function chargeCustomer(
++  customerId: string,
++  amountCents: number,
++): Promise<string> {
++  const payment = await stripe.paymentIntents.create({
++    amount: amountCents,
++    currency: 'usd',
++    customer: customerId,
++  });
++  return payment.id;
++}

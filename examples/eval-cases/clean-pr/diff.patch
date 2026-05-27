@@ -1,0 +1,11 @@
+diff --git a/src/utils/format.ts b/src/utils/format.ts
+index 0000000..3333333 100644
+--- a/src/utils/format.ts
++++ b/src/utils/format.ts
+@@ -0,0 +1,7 @@
++export function formatCurrency(amount: number, currency = 'USD'): string {
++  return new Intl.NumberFormat('en-US', {
++    style: 'currency',
++    currency,
++  }).format(amount);
++}

@@ -1,0 +1,18 @@
+{
+  "name": "security-missing-auth",
+  "description": "Admin route added without authorization middleware — security agent should flag it.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add admin delete endpoint",
+  "prBody": "",
+  "expectedFindings": [
+    {
+      "category": "security",
+      "fileGlob": "src/routes/admin.ts",
+      "mustMatchPhrases": ["authorization"]
+    }
+  ],
+  "expectedDecision": "needs_manual_review",
+  "maxFalsePositives": 1
+}

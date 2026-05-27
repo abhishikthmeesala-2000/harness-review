@@ -23,6 +23,11 @@
     "@engagement-harness/pipeline": "workspace:*",
     "@engagement-harness/agents": "workspace:*",
     "@engagement-harness/providers": "workspace:*",
-    "@engagement-harness/reports": "workspace:*"
+    "@engagement-harness/reports": "workspace:*",
+    "micromatch": "^4.0.8",
+    "zod": "^4.4.1"
+  },
+  "devDependencies": {
+    "@types/micromatch": "^4.0.9"
   }
 }

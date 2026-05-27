@@ -91,51 +91,59 @@ describe('command stubs', () => {
     vi.restoreAllMocks();
   });
 
-  const cases: Array<{ name: string; args: string[]; expected: string }> = [
-    {
-      name: 'agents list',
-      args: ['agents', 'list'],
-      expected: 'agents list not yet implemented',
-    },
-    {
-      name: 'models list',
-      args: ['models', 'list'],
-      expected: 'models list not yet implemented',
-    },
-    {
-      name: 'models validate',
-      args: ['models', 'validate'],
-      expected: 'models validate not yet implemented',
-    },
-    {
-      name: 'ci templates',
-      args: ['ci', 'templates'],
-      expected: 'ci templates not yet implemented',
-    },
-    {
-      name: 'ci templates --platform github',
-      args: ['ci', 'templates', '--platform', 'github'],
-      expected: 'ci templates not yet implemented',
-    },
-    { name: 'eval', args: ['eval'], expected: 'eval not yet implemented' },
-    {
-      name: 'feedback import',
-      args: ['feedback', 'import', 'fb.json'],
-      expected: 'feedback import not yet implemented',
-    },
-    { name: 'remediate', args: ['remediate'], expected: 'remediate not yet implemented' },
-    {
-      name: 'remediate --finding',
-      args: ['remediate', '--finding', 'EH-0001'],
-      expected: 'remediate not yet implemented',
-    },
-  ];
+  it('models list prints provider list and exits 0', async () => {
+    const result = await invoke(['models', 'list']);
+    expect(result.stdout).toContain('mock');
+    expect(result.exitCode).toBe(0);
+  });
 
-  for (const c of cases) {
-    it(`${c.name} prints stub and exits 0`, async () => {
-      const result = await invoke(c.args);
-      expect(result.stdout).toContain(c.expected);
-      expect(result.exitCode).toBe(0);
-    });
-  }
+  it('models validate exits 1 when no config is present', async () => {
+    const result = await invoke(['models', 'validate']);
+    expect(result.stderr).toContain('No config found');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('ci templates prints github yaml and exits 0', async () => {
+    const result = await invoke(['ci', 'templates', '--platform', 'github']);
+    expect(result.stdout).toContain('engagement-harness review --ci');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('ci templates --platform unknown exits 1', async () => {
+    const result = await invoke(['ci', 'templates', '--platform', 'unknown-platform']);
+    expect(result.stderr).toContain('Unknown platform');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('agents list prints all 9 registered agents and exits 0', async () => {
+    const result = await invoke(['agents', 'list']);
+    expect(result.stdout).toContain('Registered agents (9)');
+    expect(result.stdout).toContain('security');
+    expect(result.stdout).toContain('remediation');
+    expect(result.exitCode).toBe(0);
+  });
+
+  it('eval exits 1 when no config is present', async () => {
+    const result = await invoke(['eval']);
+    expect(result.stderr).toContain('No config found');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('feedback import exits 1 when file does not exist', async () => {
+    const result = await invoke(['feedback', 'import', 'nonexistent-fb.json']);
+    expect(result.stderr).toContain('Failed to import feedback');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('remediate exits 1 when --finding is missing', async () => {
+    const result = await invoke(['remediate']);
+    expect(result.stderr).toContain('--finding');
+    expect(result.exitCode).toBe(1);
+  });
+
+  it('remediate --finding exits 1 when no config is present', async () => {
+    const result = await invoke(['remediate', '--finding', 'EH-0001']);
+    expect(result.stderr).toContain('No config found');
+    expect(result.exitCode).toBe(1);
+  });
 });

@@ -1,0 +1,18 @@
+{
+  "name": "correctness-off-by-one",
+  "description": "Off-by-one loop boundary — reviewer agent should flag `i <= items.length`.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add range processing utility",
+  "prBody": "",
+  "expectedFindings": [
+    {
+      "category": "correctness",
+      "fileGlob": "**",
+      "mustMatchPhrases": []
+    }
+  ],
+  "expectedDecision": "approved_with_warnings",
+  "maxFalsePositives": 1
+}

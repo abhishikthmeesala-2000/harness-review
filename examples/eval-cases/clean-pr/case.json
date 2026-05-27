@@ -1,0 +1,12 @@
+{
+  "name": "clean-pr",
+  "description": "Simple string formatting utility — no issues expected, zero false positives allowed.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Refactor string formatting helpers",
+  "prBody": "Pure refactor — no behavior changes, full test coverage maintained.",
+  "expectedFindings": [],
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}
