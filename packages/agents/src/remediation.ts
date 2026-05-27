@@ -3,7 +3,7 @@ import type { Provider } from '@engagement-harness/providers';
 import { z } from 'zod';
 
 import { BaseAgent } from './base.js';
-import { renderDiffSummary } from './prompt-utils.js';
+import { renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
 
 export const RemediationPlanSchema = z.object({
   findingId: z.string().min(1),
@@ -36,19 +36,49 @@ export class RemediationAgent extends BaseAgent {
     const prompt = [
       'You are the Remediation agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
-      `Finding ID: ${finding.id}`,
-      `Title: ${finding.title} (${finding.severity})`,
+      '',
+      'ROLE',
+      'Generate a precise, actionable remediation plan for the finding below. Be specific — provide working code examples, not generic advice.',
+      '',
+      'FINDING',
+      `ID: ${finding.id}`,
+      `Title: ${finding.title}`,
+      `Severity: ${finding.severity}`,
       `File: ${finding.file}:${finding.lineStart}-${finding.lineEnd}`,
       `Why it matters: ${finding.whyItMatters}`,
       `Suggested fix: ${finding.suggestedFix}`,
       '',
-      'Return a JSON object with this exact shape:',
-      '{ findingId: string, plan: string, suggestedPatch?: string, testRecommendations: string[], estimatedEffort: "trivial"|"small"|"medium"|"large" }',
-      'plan: step-by-step instructions in Markdown.',
-      'testRecommendations: array of test scenarios to verify the fix.',
+      'PLAN REQUIREMENTS',
+      '1. Step-by-step fix instructions in Markdown — number each step',
+      '2. Each step must reference specific file paths and line numbers from the context',
+      '3. Include a ROLLBACK section: how to revert the change if the fix causes issues',
+      '4. If a patch is possible, include it as a unified diff in `suggestedPatch`',
       '',
-      'Changed files:',
+      'TEST RECOMMENDATIONS',
+      'Provide specific test scenarios (not generic), including:',
+      '- The happy path that the fix must not break',
+      '- The exact exploit/failure case that the fix must prevent',
+      '- Any edge cases introduced by the fix itself',
+      '',
+      'EFFORT GUIDE',
+      '  trivial: single-line fix, no tests needed',
+      '  small:   <1 hour, add/update 1-2 tests',
+      '  medium:  1-4 hours, refactor + tests',
+      '  large:   >4 hours, architectural change',
+      '',
+      'Return a JSON object with this exact shape:',
+      '{ "findingId": string, "plan": string, "suggestedPatch": string | undefined, "testRecommendations": string[], "estimatedEffort": "trivial"|"small"|"medium"|"large" }',
+      'plan: step-by-step Markdown instructions.',
+      'testRecommendations: array of specific test scenario descriptions.',
+      '',
+      'DIFF (what changed):',
       renderDiffSummary(context.diff),
+      '',
+      'CHANGED FUNCTIONS (the full function body containing the finding — use for precise patch generation):',
+      renderFunctionContext(context.diff, context.entries),
+      '',
+      'FULL FILE CONTEXT (use for specific line references in your plan):',
+      renderFileContext(context.entries),
     ].join('\n');
 
     const { content } = await provider.complete(prompt);

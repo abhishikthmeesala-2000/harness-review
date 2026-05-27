@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
@@ -11,6 +12,8 @@ import {
   type SeverityLevel,
 } from '@engagement-harness/core';
 import chalk from 'chalk';
+import { generateGithubWorkflow } from './ci-templates.js';
+import { checkIfGitRepo, detectGitPlatform, getCurrentBranch, getRemoteUrl } from '../utils/git.js';
 import { CliError } from '../utils/errors.js';
 
 export interface InitOptions {
@@ -81,7 +84,11 @@ export function buildConfigFromAnswers(answers: InitAnswers): Config {
       severityThreshold: answers.severityThreshold,
     },
     agents: { enabled: answers.enabledAgents },
-    models: Object.fromEntries(answers.enabledAgents.map((id) => [id, 'mock'])),
+    models: Object.fromEntries(answers.enabledAgents.map((id) => [id, 'anthropic'])),
+    providers: {
+      mock: {},
+      anthropic: { model: 'claude-haiku-4-5-20251001' },
+    },
     context: { ...base.context, ignoredPaths: answers.ignoredPaths },
     ci: { ...base.ci, blockOnPolicy: answers.blockOnPolicy, postComments: answers.postComments },
     alm: { platform: answers.almPlatform },
@@ -98,7 +105,7 @@ export function defaultAnswersFromProfile(cwd: string, profile: RepoProfile): In
     severityThreshold: 'low',
     ignoredPaths: profile.suggestedIgnoredPaths,
     blockOnPolicy: false,
-    postComments: false,
+    postComments: true,
   };
 }
 
@@ -212,7 +219,88 @@ export async function runInit(input: RunInitInput): Promise<{ configPath: string
   log('');
   log(`Next: run ${chalk.cyan('engagement-harness doctor')} to verify the install.`);
 
+  await setupCiWorkflow(cwd, { yes });
+
   return { configPath: ConfigLoader.resolvePath(cwd) };
+}
+
+async function setupCiWorkflow(cwd: string, options: { yes: boolean }): Promise<void> {
+  try {
+    const isGit = await checkIfGitRepo(cwd);
+    if (!isGit) return;
+
+    const platform = await detectGitPlatform(cwd);
+
+    if (platform !== 'github') {
+      if (platform) {
+        console.log(
+          chalk.dim(
+            `  (CI setup not yet supported for ${platform} — run: engagement-harness ci templates --platform ${platform} --write)`,
+          ),
+        );
+      }
+      return;
+    }
+
+    const { confirm } = await import('@inquirer/prompts');
+
+    const setupConfirmed = options.yes
+      ? true
+      : await confirm({ message: 'Set up GitHub Actions to run automatically on PRs?', default: true });
+    if (!setupConfirmed) return;
+
+    const workflowDir = path.join(cwd, '.github', 'workflows');
+    const workflowPath = path.join(workflowDir, 'engagement-harness.yml');
+    mkdirSync(workflowDir, { recursive: true });
+    writeFileSync(workflowPath, generateGithubWorkflow(cwd), 'utf8');
+    console.log(chalk.green('✓') + ' Created .github/workflows/engagement-harness.yml');
+
+    const commitConfirmed = options.yes
+      ? true
+      : await confirm({ message: 'Commit the workflow file to Git?', default: true });
+
+    if (commitConfirmed) {
+      execSync('git add .github/workflows/ .engagement-harness/ .gitignore', { cwd, stdio: 'pipe' });
+      execSync('git commit -m "ci: add Engagement Harness config and workflow"', { cwd, stdio: 'pipe' });
+      console.log(chalk.green('✓') + ' Changes committed');
+    }
+
+    const remoteUrl = await getRemoteUrl(cwd);
+
+    if (remoteUrl && commitConfirmed) {
+      const pushConfirmed = options.yes
+        ? true
+        : await confirm({ message: 'Push to remote repository?', default: true });
+
+      if (pushConfirmed) {
+        const branch = await getCurrentBranch(cwd);
+        execSync(`git push origin -- ${branch}`, { cwd, stdio: 'pipe' });
+        console.log(chalk.green('✓') + ` Pushed to origin/${branch}`);
+      }
+    }
+
+    const match = remoteUrl?.match(/github\.com[:/]([^/]+\/[^/.]+)/);
+    const repoSlug = match?.[1];
+    const secretsUrl = repoSlug
+      ? `https://github.com/${repoSlug}/settings/secrets/actions`
+      : 'your repo Settings → Secrets → Actions';
+
+    console.log('');
+    console.log(chalk.bold('📝 Next: Add your API key as a GitHub Secret'));
+    console.log(`   Go to: ${chalk.cyan(secretsUrl)}`);
+    console.log(`   Name:  ${chalk.yellow('ANTHROPIC_API_KEY')}`);
+    console.log(`   Value: Your Anthropic API key`);
+    console.log('');
+    console.log(chalk.green.bold('🎉 Setup complete! Open a PR to see Engagement Harness in action.'));
+  } catch (err) {
+    console.log(
+      chalk.yellow('  Warning: CI setup encountered an error —') +
+        ` ${err instanceof Error ? err.message : String(err)}`,
+    );
+    console.log(
+      chalk.dim('  Run `engagement-harness ci templates --platform github --write` to set up CI manually.'),
+    );
+  }
 }
 
 async function promptAnswersInteractive(

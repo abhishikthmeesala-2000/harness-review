@@ -58,10 +58,10 @@ export const ConfigSchema = z
     ci: z
       .object({
         blockOnPolicy: z.boolean().default(false),
-        postComments: z.boolean().default(false),
+        postComments: z.boolean().default(true),
         artifactsOnly: z.boolean().default(true),
       })
-      .default({ blockOnPolicy: false, postComments: false, artifactsOnly: true }),
+      .default({ blockOnPolicy: false, postComments: true, artifactsOnly: true }),
     alm: z
       .object({
         platform: AlmPlatformSchema.default('none'),

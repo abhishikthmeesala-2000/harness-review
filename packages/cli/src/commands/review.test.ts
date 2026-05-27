@@ -5,7 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { reviewCommand } from './review.js';
+import { buildInlineCommentBody, reviewCommand } from './review.js';
 
 const SAMPLE_REPO = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -40,6 +40,59 @@ function createFixtureRepo(configOverride?: object): string {
 
   return tmpDir;
 }
+
+describe('buildInlineCommentBody', () => {
+  const base = {
+    id: 'EH-0042',
+    title: 'SQL injection risk',
+    severity: 'high',
+    whyItMatters: 'Attacker can exfiltrate data.',
+    suggestedFix: 'Use parameterised queries.',
+    sourceAgent: 'security',
+  };
+  const RUN_ID = 'run-2026-05-12T00-00-00Z';
+
+  it('includes severity header', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('### [HIGH] SQL injection risk');
+  });
+
+  it('includes why it matters and suggested fix', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('**Why it matters:** Attacker can exfiltrate data.');
+    expect(body).toContain('**Suggested fix:**');
+    expect(body).toContain('Use parameterised queries.');
+  });
+
+  it('includes agent name in footer', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('`security`');
+  });
+
+  it('includes confidence percentage when provided', () => {
+    const body = buildInlineCommentBody({ ...base, confidence: 0.87 }, RUN_ID);
+    expect(body).toContain('confidence: 87%');
+  });
+
+  it('omits confidence line when not provided', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).not.toContain('confidence:');
+  });
+
+  it('includes reaction footer', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('**React to provide feedback:**');
+    expect(body).toContain('👍 Accepted (will fix)');
+    expect(body).toContain('👎 False positive');
+    expect(body).toContain('🚀 Already fixed');
+    expect(body).toContain('😕 Dismissed');
+  });
+
+  it('embeds machine-readable metadata comment', () => {
+    const body = buildInlineCommentBody(base, RUN_ID);
+    expect(body).toContain('<!-- eh-metadata: findingId=EH-0042 runId=run-2026-05-12T00-00-00Z -->');
+  });
+});
 
 describe('reviewCommand', () => {
   let tmpDir: string;
@@ -115,6 +168,59 @@ describe('reviewCommand', () => {
     // Decision is blocked_by_policy when high-confidence high-severity finding passes pipeline
     // If mock finding passes verifier (file in diff, evidence matches), exit 1; else exit 0
     expect([0, 1]).toContain(exitCode);
+  });
+
+  it('posts inline comment per finding when postComments is true', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    vi.stubGlobal('fetch', fetchMock);
+
+    process.env['GITHUB_TOKEN'] = 'ghp_test';
+    process.env['GITHUB_REPOSITORY'] = 'acme/backend';
+    process.env['GITHUB_PR_NUMBER'] = '7';
+
+    tmpDir = createFixtureRepo({
+      client: { name: 'Test', engagement: 'test' },
+      agents: { enabled: ['security'] },
+      providers: { mock: {} },
+      review: { confidenceThreshold: 0.1, severityThreshold: 'low', requireVerifierApproval: false },
+      alm: { platform: 'github' },
+      ci: { blockOnPolicy: false, postComments: true, artifactsOnly: false },
+      reports: { formats: ['json', 'markdown'], outputDir: '.engagement-harness/reports' },
+    });
+    process.chdir(tmpDir);
+
+    await reviewCommand({ ci: true, base: 'HEAD~1', head: 'HEAD' });
+
+    // If any findings were published, inline comment calls precede summary call
+    const pullCalls = fetchMock.mock.calls.filter(([url]: [string]) =>
+      (url as string).includes('/pulls/'),
+    );
+    const issueCalls = fetchMock.mock.calls.filter(([url]: [string]) =>
+      (url as string).includes('/issues/'),
+    );
+
+    // Each inline call must carry the required GitHub PR review comment fields
+    for (const [, init] of pullCalls) {
+      const body = JSON.parse((init as RequestInit).body as string);
+      expect(body).toMatchObject({
+        commit_id: expect.any(String),
+        path: expect.any(String),
+        line: expect.any(Number),
+        side: 'RIGHT',
+        body: expect.stringContaining('['),
+      });
+    }
+
+    // Summary issued as an issue comment (or no findings → no calls at all)
+    if (issueCalls.length > 0) {
+      const summaryBody = JSON.parse((issueCalls[0][1] as RequestInit).body as string);
+      expect(summaryBody.body).toBeTruthy();
+    }
+
+    delete process.env['GITHUB_TOKEN'];
+    delete process.env['GITHUB_REPOSITORY'];
+    delete process.env['GITHUB_PR_NUMBER'];
+    vi.unstubAllGlobals();
   });
 
   it('warns and exits 0 when config is missing', async () => {

@@ -1,7 +1,6 @@
 import { ConfigSchema, type Config } from '@engagement-harness/core';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { NotImplementedError } from './interface.js';
 import { MockProvider } from './mock.js';
 import { ProviderRegistry } from './registry.js';
 
@@ -34,13 +33,19 @@ describe('ProviderRegistry', () => {
     expect(() => ProviderRegistry.get('does-not-exist', buildConfig())).toThrow(/Unknown provider/);
   });
 
-  it('returns the OpenAI stub when configured; complete() throws NotImplementedError', async () => {
-    const config = buildConfig({
-      providers: { mock: {}, openai: { model: 'gpt-test' } },
-    });
-    const provider = ProviderRegistry.get('openai', config);
-    expect(provider.name).toBe('openai');
-    await expect(provider.complete('hi')).rejects.toBeInstanceOf(NotImplementedError);
+  it('returns an OpenAIProvider when configured; complete() throws when key absent', async () => {
+    const saved = process.env['OPENAI_API_KEY'];
+    delete process.env['OPENAI_API_KEY'];
+    try {
+      const config = buildConfig({
+        providers: { mock: {}, openai: { model: 'gpt-test' } },
+      });
+      const provider = ProviderRegistry.get('openai', config);
+      expect(provider.name).toBe('openai');
+      await expect(provider.complete('hi')).rejects.toThrow('OPENAI_API_KEY environment variable not set');
+    } finally {
+      if (saved !== undefined) process.env['OPENAI_API_KEY'] = saved;
+    }
   });
 
   it('throws a clear error when openai is requested but not configured', () => {

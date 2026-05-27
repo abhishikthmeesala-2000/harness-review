@@ -244,6 +244,127 @@ const DEFAULT_FIXTURES: Record<string, string> = {
   }),
 };
 
+interface DiffContext {
+  file: string;
+  lineStart: number;
+  lineEnd: number;
+  addedLines: string[];
+}
+
+/** Extensions considered non-source (config, docs, lock files). */
+const NON_SOURCE_EXTENSIONS = new Set([
+  '.md', '.json', '.yaml', '.yml', '.toml', '.xml', '.txt',
+  '.lock', '.env', '.ini', '.cfg', '.conf', '.log', '.csv',
+]);
+
+function isSourceFile(path: string): boolean {
+  if (path.startsWith('.')) return false; // dotfiles: .gitignore, .eslintrc, etc.
+  const dot = path.lastIndexOf('.');
+  if (dot === -1) return false; // no extension
+  return !NON_SOURCE_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
+/**
+ * Parse the first SOURCE-CODE changed file, hunk range, and added lines from a prompt.
+ * Skips config/doc/dotfiles so the finding targets actual code, not .gitignore.
+ * Returns null when no parseable diff with source files is present.
+ *
+ * Handles two formats:
+ *   renderDiffSummary → "--- server.js (modified)"  +  "@@ -25,3 +25,4 @@"
+ *   raw unified diff  → "diff --git a/server.js b/server.js"
+ */
+function parseDiffContext(prompt: string): DiffContext | null {
+  // Collect all file headers in order, pick first source file.
+  let file: string | null = null;
+
+  for (const m of prompt.matchAll(/^--- (.+?) \(/gm)) {
+    const candidate = m[1]?.trim();
+    if (candidate && isSourceFile(candidate)) { file = candidate; break; }
+  }
+  if (!file) {
+    for (const m of prompt.matchAll(/^diff --git a\/(.+?) b\//gm)) {
+      const candidate = m[1]?.trim();
+      if (candidate && isSourceFile(candidate)) { file = candidate; break; }
+    }
+  }
+  if (!file) return null;
+
+  const hunkMatch = prompt.match(/@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+  if (!hunkMatch) return null;
+
+  const newStart = parseInt(hunkMatch[1]!, 10);
+  const newCount = hunkMatch[2] !== undefined ? parseInt(hunkMatch[2], 10) : 1;
+  const lineEnd = Math.max(newStart, newStart + newCount - 1);
+
+  const addedLines: string[] = [];
+  for (const m of prompt.matchAll(/^\+(?!\+\+)(.+)$/gm)) {
+    if (m[1]) addedLines.push(m[1].trim());
+  }
+
+  return { file, lineStart: newStart, lineEnd, addedLines };
+}
+
+/**
+ * Patterns that indicate a security-relevant line in the diff.
+ * Used to find a specific line to use as diff-type evidence so the verifier
+ * can confirm the finding is grounded in the actual diff.
+ */
+const SECURITY_SIGNALS: RegExp[] = [
+  /\[REDACTED_SECRET\]/,                               // secret already caught by the redactor
+  /`[^`]*\$\{[^}]+\}[^`]*`/,                         // template literal SQL/injection
+  /password\s*[:=]\s*['"`][^'"`]{4,}/i,               // hardcoded password
+  /secret\s*[:=]\s*['"`][^'"`]{4,}/i,                 // hardcoded secret
+  /api.?key\s*[:=]\s*['"`][^'"`]{4,}/i,               // hardcoded API key
+  /\beval\s*\(/,                                       // eval()
+  /\bexec\s*\(/,                                       // exec()
+  /app\.\w+\s*\([^,)]+,\s*(?:async\s*)?\(req/,        // route handler (potential missing auth)
+];
+
+function findSuspiciousLine(addedLines: string[], signals: RegExp[]): string | null {
+  for (const line of addedLines) {
+    for (const signal of signals) {
+      if (signal.test(line)) return line;
+    }
+  }
+  return null;
+}
+
+/**
+ * Patch a JSON-array fixture so findings reference the real diff's file and
+ * line range. For the security dimension, diff-type evidence is also updated
+ * to the first suspicious added line found in the diff so the verifier can
+ * confirm the finding is grounded. All other dimensions keep original evidence
+ * (which already matches their specific eval-case diffs).
+ */
+function patchFindings(raw: string, ctx: DiffContext, dimension: string): string {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (!Array.isArray(parsed)) return raw; // remediation object — leave untouched
+
+  const suspiciousLine =
+    dimension.includes('security') ? findSuspiciousLine(ctx.addedLines, SECURITY_SIGNALS) : null;
+
+  const patched = (parsed as Record<string, unknown>[]).map((f) => {
+    const updated: Record<string, unknown> = {
+      ...f,
+      file: ctx.file,
+      lineStart: ctx.lineStart,
+      lineEnd: ctx.lineEnd,
+    };
+    if (suspiciousLine && Array.isArray(f['evidence'])) {
+      updated['evidence'] = (f['evidence'] as Record<string, unknown>[]).map((e) =>
+        e['type'] === 'diff' ? { ...e, content: suspiciousLine } : e,
+      );
+    }
+    return updated;
+  });
+  return JSON.stringify(patched);
+}
+
 /**
  * MockProvider — returns canned JSON-array responses for tests and CI runs that
  * have no API key configured. Two modes:
@@ -251,6 +372,9 @@ const DEFAULT_FIXTURES: Record<string, string> = {
  *  - "deterministic": match prompt against a keyword fixture map. The default
  *    fixtures key off `dimension: <name>` strings emitted by the BaseAgent
  *    prompt template, so each agent dimension reliably maps to one finding.
+ *    When the prompt contains a parseable diff, file/line references in the
+ *    fixture are patched to the actual changed file and hunk range so the
+ *    verifier accepts findings against any real diff, not just the 6 eval fixtures.
  *  - "scripted": look up by hash of (first 200 chars of prompt) in a JSON file.
  *    Used to pin integration-test responses to specific inputs.
  *
@@ -287,12 +411,19 @@ export class MockProvider implements Provider {
 
   private deterministicResponse(prompt: string): string {
     const lower = prompt.toLowerCase();
+    let matchedKey = '';
+    let matchedValue: string | undefined;
     for (const [key, value] of Object.entries(this.fixtures)) {
       if (lower.includes(key.toLowerCase())) {
-        return value;
+        matchedKey = key;
+        matchedValue = value;
+        break;
       }
     }
-    return EMPTY_RESPONSE;
+    if (!matchedValue) return EMPTY_RESPONSE;
+
+    const ctx = parseDiffContext(prompt);
+    return ctx ? patchFindings(matchedValue, ctx, matchedKey) : matchedValue;
   }
 
   private scriptedResponse(prompt: string): string {

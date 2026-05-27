@@ -1,10 +1,18 @@
 import { AnthropicProvider, MockProvider, ProviderRegistry } from '@engagement-harness/providers';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ModelRouter } from './router.js';
 import { makeConfig } from './test-helpers.js';
 
+beforeEach(() => {
+  process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+  process.env.OPENAI_API_KEY = 'sk-test-openai';
+  vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }));
+});
+
 afterEach(() => {
+  delete process.env.ANTHROPIC_API_KEY;
+  delete process.env.OPENAI_API_KEY;
   ProviderRegistry.reset();
   vi.restoreAllMocks();
 });
