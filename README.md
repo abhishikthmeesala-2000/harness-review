@@ -1,203 +1,168 @@
 # Engagement Harness
 
-Engagement Harness is a CI-native, multi-agent code review platform that installs into a client repository, learns the project through an interactive setup, and runs automatically on every pull request. It routes each PR diff through nine specialized AI agents — security, correctness, testing, domain-policy, data architecture, SRE observability, design principles, PR intent gap, and remediation — then aggregates their findings through a verification pipeline, confidence scorer, policy engine, and quality gate to produce a single, auditable decision: `approved`, `needs_manual_review`, or `rejected`. Unlike a generic AI reviewer, Engagement Harness is the harness _around_ the AI: it controls context selection, secret redaction, finding deduplication, and provider routing so the AI's output is trustworthy and measurable.
+[![CI](https://github.com/abhishikthmeesala-2000/harness-review/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishikthmeesala-2000/harness-review/actions/workflows/ci.yml)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
+[![Node](https://img.shields.io/badge/Node-%E2%89%A520-green)](https://nodejs.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+A CI-native, multi-agent pull request review platform. Engagement Harness installs into any Git repository, runs nine specialized AI agents on every PR diff, and emits a single auditable decision — `approved`, `approved_with_warnings`, `needs_manual_review`, or `blocked_by_policy` — along with structured findings in JSON, Markdown, and HTML.
 
 ---
 
-## Features
+## How It Works
 
-- **9 specialized agents** — each focused on one review dimension (security, correctness, testing, domain-policy, data, observability, design, intent-gap, remediation)
-- **Multi-provider routing** — assign different AI providers (Anthropic Claude, OpenAI GPT, or the built-in MockProvider) per agent; falls back to mock when no key is configured
-- **CI-native** — single `review` command designed for GitHub Actions; exits non-zero on `rejected` decision
-- **Secret redaction** — diff lines, file content, and PR metadata are redacted before reaching any agent prompt
-- **Finding verification** — every candidate finding is checked for file presence in the diff, evidence grounded in diff content, and non-generic fix phrasing
-- **Confidence scoring** — weighted evidence scoring drives a per-finding confidence level that feeds the quality gate
-- **Policy engine** — configurable thresholds for auto-approve and auto-reject; per-severity suppression lists
-- **Structured JSON reports** — machine-readable reports written to `.engagement-harness/reports/` on every run
-- **Interactive setup** — `engagement-harness init` walks through configuration and generates `.engagement-harness/config.json`
-- **Client-specific rules** — drop Markdown rule files into `.engagement-harness/rules/` and the domain-policy agent enforces them
+```
+Pull Request diff
+       │
+       ▼
+  ContextEngine          Builds ContextBundle: changed files, imports,
+  SecretRedactor         tests, rule files; redacts secrets before any
+                         agent prompt sees the content
+       │
+       ▼
+  AgentOrchestrator ─────────────────────────────────────────────────┐
+       │                                                               │
+  ┌────┴────────────────────────────────────────────────────────┐     │
+  │  reviewer │ security │ testing │ domain-policy │ data-arch  │     │
+  │  sre-observability │ design-principles │ pr-intent-gap      │     │
+  └────┬────────────────────────────────────────────────────────┘     │
+       │ CandidateFinding[]                                            │
+       ▼                                                               │
+  FindingPipeline (7 stages)                                           │
+    1. Schema validation                                               │
+    2. Evidence scoring (none / weak / medium / strong)                │
+    3. Verification (file presence, evidence grounding, fix quality)   │
+    4. Confidence calibration → Finding[]                              │
+    5. Deduplication (highest-confidence per file+line+dimension)      │
+    6. Quality gate (confidence + severity thresholds)                 │
+    7. Policy decision                                                 │
+       │                                                               │
+       ▼                                                               │
+  Reports (JSON + Markdown + HTML)   ◄──── RemediationAgent ──────────┘
+  ALM comments (GitHub/GitLab/…)
+  Feedback reactions (👍 👎 🚀 😕 👀)
+```
+
+---
+
+## Agents
+
+| Agent ID | Dimension | Checks |
+|---|---|---|
+| `reviewer` | correctness | Logic bugs, off-by-one errors, null dereferences, risky behavior changes |
+| `security` | security | SQL injection, XSS, missing authorization, unsafe crypto, secret exposure |
+| `testing` | testing | Missing tests for new exports, weak assertions, untested edge cases |
+| `domain-policy` | domain-policy | Violations of client rules in `.engagement-harness/rules/*.md` |
+| `data-architecture` | data | Risky migrations, non-nullable columns without defaults, missing indices |
+| `sre-observability` | observability | Silent error swallowing, missing structured logs, SLO-impacting changes |
+| `design-principles` | design | SRP violations, high coupling, abstraction leaks, naming clarity |
+| `pr-intent-gap` | intent-gap | Gaps between PR description and actual diff changes |
+| `remediation` | remediation | Structured fix plans with estimated effort and test recommendations |
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js ≥ 18
-- pnpm ≥ 8 (`npm install -g pnpm`)
-
-### Installation
-
 ```bash
+# 1. Clone and build
 git clone https://github.com/abhishikthmeesala-2000/harness-review.git
 cd harness-review
-pnpm install
-pnpm build
-```
+pnpm install && pnpm build
 
-Link the CLI globally (optional — you can also call it via `node packages/cli/dist/bin/engagement-harness.js`):
+# 2. Link the CLI globally
+cd packages/cli && pnpm link --global && cd ../..
 
-```bash
-cd packages/cli
-pnpm link --global
-```
-
-> **Troubleshooting:** If `pnpm link --global` fails with `ERR_PNPM_NO_GLOBAL_BIN_DIR`, pnpm has no global bin directory configured. Fix it with:
-> ```bash
-> pnpm setup          # adds PNPM_HOME to your shell profile
-> source ~/.zshrc     # or ~/.bashrc — reload the profile
-> pnpm link --global  # retry
-> ```
-> Alternatively, skip global linking entirely and invoke the CLI directly via `node packages/cli/dist/bin/engagement-harness.js`.
-
-### Initialize a repository
-
-Run this inside the repository you want to review:
-
-```bash
+# 3. Initialize a client repository
 cd /path/to/your/repo
 engagement-harness init
 ```
 
-This creates `.engagement-harness/config.json` with your client name, engagement ID, and agent configuration.
-
-### Verify setup
-
-```bash
-engagement-harness doctor
-```
-
-Checks that the config file is valid, all enabled agents are registered, and providers are reachable.
-
-### Run a review
-
-```bash
-engagement-harness review --base main --head feature/my-branch
-```
-
-Or omit `--head` to review uncommitted working-tree changes against `main`.
-
-### Example output
-
-```
-Engagement Harness Review
-Decision:   needs_manual_review
-Confidence: 80%
-Findings:   1 published / 4 rejected
-
-Top findings:
-  [HIGH] server.js:8  Hardcoded database credentials in source
-```
-
-Reports are written to `.engagement-harness/reports/run-<timestamp>/`.
+See [docs/QUICK_START.md](docs/QUICK_START.md) for the full 5-minute setup guide, including how to add an API key and run your first review.
 
 ---
 
-## Configuration
+## Automatic Feedback Loop
 
-Configuration lives in `.engagement-harness/config.json` at the repository root. All fields are optional except `client.name` and `client.engagement`.
+After init, Engagement Harness installs three GitHub Actions workflows:
 
-```json
-{
-  "client": {
-    "name": "Acme Corp",
-    "engagement": "payments-platform-2026"
-  },
-  "models": {
-    "security": "anthropic",
-    "reviewer": "openai"
-  },
-  "providers": {
-    "anthropic": { "model": "claude-haiku-4-5-20251001" },
-    "openai":    { "model": "gpt-4o-mini" }
-  }
-}
-```
+- **`engagement-harness.yml`** — Runs the review on every PR
+- **`feedback-on-merge.yml`** — Collects emoji reactions when a PR merges
+- **`collect-feedback.yml`** — Weekly sweep of all recent PR reactions
 
-See [CONFIG.md](CONFIG.md) for the full configuration reference, including `review`, `agents`, `ci`, `alm`, and `policy` sections.
+Developers react to finding comments with emoji to signal acceptance or rejection:
+
+| Emoji | Meaning |
+|---|---|
+| 👍 | Accepted — will fix |
+| 👎 | False positive |
+| 🚀 or 🎉 | Already fixed |
+| 😕 | Dismissed |
+| 👀 | Acknowledged |
+
+Reactions are aggregated per agent into `metrics.json`, which feeds back into provider routing decisions and helps you identify which agents produce the most actionable findings.
 
 ---
 
-## Using Live AI Providers
+## CLI Reference
 
-By default all agents use the built-in `MockProvider` (deterministic canned responses, no API key required). To use real models, set environment variables and add providers to your config:
-
-**Anthropic (Claude)**
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
 ```
+engagement-harness <command>
 
-```json
-{
-  "models": { "security": "anthropic" },
-  "providers": { "anthropic": { "model": "claude-haiku-4-5-20251001" } }
-}
+Core
+  init                  Initialize in the current repository (interactive)
+  uninit                Remove config, scaffold, and workflows
+  doctor                Validate installation, config, and environment
+  review                Run a PR review
+    --ci                Headless CI mode
+    --base <ref>        Base git ref for diff
+    --head <ref>        Head git ref for diff
+  remediate             Generate a remediation plan for a finding
+    --finding <id>      Finding ID (e.g. EH-0001)
+
+Reports
+  report latest         Print the most recent report to stdout
+  report run <id>       Print a specific run's report
+  report list           List all run IDs with timestamps and decisions
+
+Configuration
+  config validate       Validate the current config.json
+
+Agents & Models
+  agents list           List registered agents with IDs and descriptions
+  models list           List providers and per-agent routing
+  models validate       Validate provider availability for each agent
+
+CI Integration
+  ci templates          Generate CI workflow templates
+    --platform <name>   github | gitlab | azure-devops | bitbucket
+    --context <mode>    client | source | auto (default: auto)
+    --write             Write to disk (default for github)
+
+Feedback
+  feedback collect      Collect reactions from GitHub PR comments
+    --repo <owner/repo> Repository to scan (required)
+    --pr <number>       Scan a specific PR
+    --days <number>     Days to look back (default: 7)
+    --memory-dir <path> Write Claude memory file after collecting
+  feedback import <file>  Import a feedback JSON file
+  feedback report       Print a feedback metrics report
+    --format text|json  Output format (default: text)
+
+Evaluation
+  eval                  Run eval suite against fixture cases
 ```
-
-**OpenAI (GPT)**
-
-```bash
-export OPENAI_API_KEY=sk-...
-```
-
-```json
-{
-  "models": { "reviewer": "openai" },
-  "providers": { "openai": { "model": "gpt-4o-mini" } }
-}
-```
-
-Per-agent model assignment lets you mix providers — for example, route the security agent to Anthropic Claude and all other agents to the mock during a cost-sensitive pilot.
-
-See [PROVIDERS.md](PROVIDERS.md) for the provider interface and how to register a custom provider.
 
 ---
 
-## Running in CI (GitHub Actions)
+## Features
 
-```yaml
-name: Engagement Harness Review
-on:
-  pull_request:
-    branches: [main]
-
-jobs:
-  review:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 8
-
-      - run: pnpm install && pnpm build
-        working-directory: /path/to/harness-review
-
-      - name: Run review
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        run: |
-          node /path/to/harness-review/packages/cli/dist/bin/engagement-harness.js \
-            review --base ${{ github.event.pull_request.base.sha }} \
-                   --head ${{ github.event.pull_request.head.sha }}
-```
-
-The `review` command exits with code `1` when the decision is `rejected`, integrating naturally with branch protection rules.
-
----
-
-## Safety Guarantees
-
-- **Never executes code** — diffs are read as text only; no subprocess runs application code
-- **Never exposes secrets** — `SecretRedactor` rewrites diff lines and file content before any agent sees them
-- **Never auto-fixes or commits** — reports are read-only; the `remediate` command produces plan text only
-- **Never posts comments by default** — `config.ci.postComments` defaults to `false`
-
-See [SAFETY.md](SAFETY.md) for the full list of guarantees and redaction pattern details.
+- **Multi-provider routing** — assign Anthropic Claude, OpenAI GPT, or the built-in `MockProvider` per agent; falls back to mock with no API key required
+- **Secret redaction** — diff lines, file content, and PR metadata are scrubbed before any provider sees them (PEM keys, `sk-` tokens, JWTs, `API_KEY=...` env patterns, and more)
+- **7-stage pipeline** — schema validation → evidence scoring → verification → confidence calibration → deduplication → quality gate → policy decision
+- **Evidence-based confidence** — each finding carries a `[0, 1]` confidence score derived from diff grounding, verifier approval, and false-positive risk
+- **Structured reports** — JSON, Markdown, and HTML written to `.engagement-harness/reports/run-<timestamp>/`
+- **Client-specific rules** — Markdown files in `.engagement-harness/rules/` are loaded and enforced by the `domain-policy` agent
+- **Feedback metrics** — per-agent acceptance and false-positive rates tracked in `.engagement-harness/feedback/metrics.json`
 
 ---
 
@@ -205,15 +170,66 @@ See [SAFETY.md](SAFETY.md) for the full list of guarantees and redaction pattern
 
 | Document | Contents |
 |---|---|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | System layers, data flow, and package dependency graph |
-| [AGENTS.md](AGENTS.md) | All 9 agent IDs, dimensions, finding categories, and when to disable |
-| [CONFIG.md](CONFIG.md) | Full configuration schema reference |
-| [PROVIDERS.md](PROVIDERS.md) | Provider interface, built-in providers, custom provider registration |
-| [SAFETY.md](SAFETY.md) | Safety guarantees and secret redaction patterns |
-| [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md) | Pre-pilot checklist |
+| [docs/QUICK_START.md](docs/QUICK_START.md) | 5-minute setup guide |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Package graph, data flow, design decisions |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Complete `config.json` field reference |
+| [docs/AGENTS.md](docs/AGENTS.md) | All 9 agents with example findings |
+| [docs/FEEDBACK_SYSTEM.md](docs/FEEDBACK_SYSTEM.md) | Feedback loop, reaction mapping, metrics |
+| [docs/CUSTOM_PROMPTS.md](docs/CUSTOM_PROMPTS.md) | Client customization and rule overrides |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, adding agents, PR process |
+| [SECURITY.md](SECURITY.md) | Security policy and vulnerability reporting |
+
+---
+
+## Project Structure
+
+```
+engagement-harness/
+├── packages/
+│   ├── core/          Schemas, config loader, context engine, secret redaction, ALM interface
+│   ├── providers/     MockProvider, AnthropicProvider, OpenAIProvider, ProviderRegistry
+│   ├── agents/        BaseAgent + 9 specialized agents, AgentOrchestrator, ModelRouter
+│   ├── pipeline/      7-stage FindingPipeline, evidence scorer, verifier, confidence scorer
+│   ├── reports/       ReportGenerator, JSON/Markdown/HTML renderers, ReportWriter
+│   ├── feedback/      ReactionCollector, FeedbackStore, MetricsCalculator
+│   ├── ci/            GitHubCommenter (posts findings with metadata for reaction collection)
+│   ├── eval/          EvalRunner, case schema, FeedbackImporter
+│   └── cli/           Commander.js entry point + all command implementations
+├── .github/
+│   └── workflows/     ci.yml, engagement-harness.yml, feedback-on-merge.yml, collect-feedback.yml
+├── examples/
+│   └── sample-repo/   Example repository with .engagement-harness/rules/payments.md
+└── .engagement-harness/  (created in client repos by `engagement-harness init`)
+    ├── config.json
+    ├── rules/
+    └── reports/
+```
+
+---
+
+## Requirements
+
+- Node.js ≥ 20
+- pnpm ≥ 8 (`npm install -g pnpm`)
+- An Anthropic or OpenAI API key (optional — mock provider works without one)
+
+---
+
+## Local Development
+
+```bash
+pnpm install        # Install all workspace dependencies
+pnpm build          # Compile all packages (TypeScript project references)
+pnpm test           # Run Vitest test suite
+pnpm typecheck      # Type-check without emitting
+pnpm lint           # ESLint all package sources
+pnpm format         # Prettier all package sources
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a new agent or CLI command.
 
 ---
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
