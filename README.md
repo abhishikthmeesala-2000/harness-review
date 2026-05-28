@@ -95,9 +95,8 @@ Developers react to finding comments with emoji to signal acceptance or rejectio
 |---|---|
 | 👍 | Accepted — will fix |
 | 👎 | False positive |
-| 🚀 or 🎉 | Already fixed |
+| 🚀 | Already fixed |
 | 😕 | Dismissed |
-| 👀 | Acknowledged |
 
 Reactions are aggregated per agent into `metrics.json`, which feeds back into provider routing decisions and helps you identify which agents produce the most actionable findings.
 
