@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildProgram, run } from './index.js';
 
@@ -84,7 +88,21 @@ describe('CLI program', () => {
 });
 
 describe('command stubs', () => {
+  // Several stubs (e.g. `ci templates --platform github`) write workflow files
+  // relative to process.cwd(). Run them in a throwaway temp dir so they never
+  // touch the real repo's .github/workflows.
+  let origCwd: string;
+  let tmp: string;
+
+  beforeEach(() => {
+    origCwd = process.cwd();
+    tmp = mkdtempSync(path.join(tmpdir(), 'eh-cli-stub-'));
+    process.chdir(tmp);
+  });
+
   afterEach(() => {
+    process.chdir(origCwd);
+    rmSync(tmp, { recursive: true, force: true });
     vi.restoreAllMocks();
   });
 
