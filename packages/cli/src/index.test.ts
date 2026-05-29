@@ -30,10 +30,7 @@ async function invoke(args: string[]): Promise<InvocationResult> {
   } catch (err) {
     if (err && typeof err === 'object' && 'exitCode' in err) {
       exitCode = Number((err as { exitCode: unknown }).exitCode) || 1;
-    } else if (
-      err instanceof Error &&
-      err.message.startsWith('process.exit unexpectedly called')
-    ) {
+    } else if (err instanceof Error && err.message.startsWith('process.exit unexpectedly called')) {
       // vitest intercepts process.exit — extract the code from the message
       const match = err.message.match(/with "(\d+)"/);
       exitCode = match ? Number(match[1]) : 0;

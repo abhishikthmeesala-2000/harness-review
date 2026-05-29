@@ -65,7 +65,9 @@ describe('AnthropicProvider', () => {
   it('throws clear error when ANTHROPIC_API_KEY is not set', async () => {
     delete process.env['ANTHROPIC_API_KEY'];
     const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
-    await expect(provider.complete('hello')).rejects.toThrow('ANTHROPIC_API_KEY environment variable not set');
+    await expect(provider.complete('hello')).rejects.toThrow(
+      'ANTHROPIC_API_KEY environment variable not set',
+    );
   });
 
   it('throws ProviderError on network failure', async () => {

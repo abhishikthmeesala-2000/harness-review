@@ -70,10 +70,7 @@ export class AnthropicProvider implements Provider {
 
     const block = data.content?.[0];
     if (!block || block.type !== 'text' || typeof block.text !== 'string') {
-      throw new ProviderError(
-        'Anthropic response missing content[0].text',
-        'anthropic',
-      );
+      throw new ProviderError('Anthropic response missing content[0].text', 'anthropic');
     }
 
     const tokensUsed =

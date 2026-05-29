@@ -69,10 +69,7 @@ export class OpenAIProvider implements Provider {
 
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== 'string') {
-      throw new ProviderError(
-        'OpenAI response missing choices[0].message.content',
-        'openai',
-      );
+      throw new ProviderError('OpenAI response missing choices[0].message.content', 'openai');
     }
 
     return { content, tokensUsed: data.usage?.total_tokens };

@@ -4,19 +4,22 @@ import { ciTemplatesCommand, type CiTemplatesOptions } from './commands/ci-templ
 import { configValidateCommand } from './commands/config-validate.js';
 import { doctorCommand } from './commands/doctor.js';
 import { evalCommand } from './commands/eval.js';
-import { feedbackCollectCommand, type FeedbackCollectOptions } from './commands/feedback-collect.js';
+import {
+  feedbackCollectCommand,
+  type FeedbackCollectOptions,
+} from './commands/feedback-collect.js';
 import { feedbackImportCommand } from './commands/feedback-import.js';
+import {
+  feedbackPilotReportCommand,
+  type FeedbackPilotReportOptions,
+} from './commands/feedback-pilot-report.js';
 import { feedbackReportCommand, type FeedbackReportOptions } from './commands/feedback-report.js';
 import { initCommand, type InitOptions } from './commands/init.js';
 import { uninitCommand, type UninitOptions } from './commands/uninit.js';
 import { modelsListCommand } from './commands/models-list.js';
 import { modelsValidateCommand } from './commands/models-validate.js';
 import { remediateCommand, type RemediateOptions } from './commands/remediate.js';
-import {
-  reportLatestCommand,
-  reportListCommand,
-  reportRunCommand,
-} from './commands/report.js';
+import { reportLatestCommand, reportListCommand, reportRunCommand } from './commands/report.js';
 import { reviewCommand, type ReviewOptions } from './commands/review.js';
 
 const VERSION = '0.1.0';
@@ -39,7 +42,9 @@ export function buildProgram(): Command {
 
   program
     .command('uninit')
-    .description('Remove Engagement Harness config, scaffold, and workflows from the current repository')
+    .description(
+      'Remove Engagement Harness config, scaffold, and workflows from the current repository',
+    )
     .option('-y, --yes', 'non-interactive mode — skip all prompts')
     .action(async (options: UninitOptions) => {
       await uninitCommand(options);
@@ -116,7 +121,10 @@ export function buildProgram(): Command {
   ci.command('templates')
     .description('Generate CI workflow templates')
     .option('--platform <name>', 'CI platform: github | gitlab | azure-devops | bitbucket')
-    .option('--write', 'Write the template file to disk (default for github; use --no-write to print instead)')
+    .option(
+      '--write',
+      'Write the template file to disk (default for github; use --no-write to print instead)',
+    )
     .option('--no-print', 'Do not print to stdout')
     .option('--context <mode>', 'Template context: client | source | auto (default: auto)')
     .action((options: CiTemplatesOptions) => {
@@ -154,6 +162,13 @@ export function buildProgram(): Command {
     .option('--format <format>', 'output format: text|json', 'text')
     .action(async (options: FeedbackReportOptions) => {
       await feedbackReportCommand(options);
+    });
+  feedback
+    .command('pilot-report')
+    .description('Print a pilot program summary report')
+    .option('--days <number>', 'days to include (default: 14)', (v: string) => Number(v))
+    .action(async (options: FeedbackPilotReportOptions) => {
+      await feedbackPilotReportCommand(options);
     });
 
   program

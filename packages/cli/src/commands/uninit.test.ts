@@ -54,9 +54,7 @@ describe('removeGitignoreEntries', () => {
 
 describe('runUninit', () => {
   it('throws CliError when not initialized', async () => {
-    await expect(runUninit({ cwd: dir, yes: true, log: noopLog })).rejects.toBeInstanceOf(
-      CliError,
-    );
+    await expect(runUninit({ cwd: dir, yes: true, log: noopLog })).rejects.toBeInstanceOf(CliError);
   });
 
   it('removes .engagement-harness directory', async () => {
@@ -71,21 +69,13 @@ describe('runUninit', () => {
     await runInit({ cwd: dir, yes: true, log: noopLog });
     const wfDir = path.join(dir, '.github', 'workflows');
     mkdirSync(wfDir, { recursive: true });
-    for (const wf of [
-      'engagement-harness.yml',
-      'feedback-on-merge.yml',
-      'collect-feedback.yml',
-    ]) {
+    for (const wf of ['engagement-harness.yml', 'feedback-on-merge.yml', 'collect-feedback.yml']) {
       writeFileSync(path.join(wfDir, wf), '# placeholder', 'utf8');
     }
 
     await runUninit({ cwd: dir, yes: true, log: noopLog });
 
-    for (const wf of [
-      'engagement-harness.yml',
-      'feedback-on-merge.yml',
-      'collect-feedback.yml',
-    ]) {
+    for (const wf of ['engagement-harness.yml', 'feedback-on-merge.yml', 'collect-feedback.yml']) {
       expect(existsSync(path.join(wfDir, wf))).toBe(false);
     }
   });

@@ -15,17 +15,25 @@ export class GitHubAlm implements AlmAdapter {
       await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github+json',
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
         body: JSON.stringify({ body: markdown }),
       });
-    } catch { /* never fail the build */ }
+    } catch {
+      /* never fail the build */
+    }
   }
 
-  async postInlineComment(prRef: PrRef, commitSha: string, file: string, line: number, body: string): Promise<void> {
+  async postInlineComment(
+    prRef: PrRef,
+    commitSha: string,
+    file: string,
+    line: number,
+    body: string,
+  ): Promise<void> {
     const token = process.env['GITHUB_TOKEN'];
     if (!token) return;
     const url = `https://api.github.com/repos/${prRef.owner}/${prRef.repo}/pulls/${prRef.pullNumber}/comments`;
@@ -33,17 +41,23 @@ export class GitHubAlm implements AlmAdapter {
       await fetch(url, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Accept': 'application/vnd.github+json',
+          Accept: 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
         body: JSON.stringify({ body, commit_id: commitSha, path: file, line, side: 'RIGHT' }),
       });
-    } catch { /* never fail the build */ }
+    } catch {
+      /* never fail the build */
+    }
   }
 
-  async updateCheckStatus(_prRef: PrRef, _status: 'success' | 'failure' | 'pending', _summary: string): Promise<void> {
+  async updateCheckStatus(
+    _prRef: PrRef,
+    _status: 'success' | 'failure' | 'pending',
+    _summary: string,
+  ): Promise<void> {
     // requires checks:write permission — silently no-op in default config
   }
 }

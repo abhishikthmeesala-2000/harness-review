@@ -62,7 +62,9 @@ export async function feedbackCollectCommand(options: FeedbackCollectOptions): P
     counts[item.state] = (counts[item.state] ?? 0) + 1;
   }
 
-  console.log(chalk.green(`✓ Collected ${result.collected.length} feedback entries from reactions`));
+  console.log(
+    chalk.green(`✓ Collected ${result.collected.length} feedback entries from reactions`),
+  );
   for (const [state, count] of Object.entries(counts)) {
     console.log(`  ${state}: ${count}`);
   }

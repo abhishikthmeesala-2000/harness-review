@@ -434,7 +434,17 @@ function detectPythonFramework(repoRoot: string): string | null {
     .join('\n')
     .toLowerCase();
   if (!blobs.trim()) return null;
-  const ordered = ['django', 'fastapi', 'flask', 'starlette', 'tornado', 'aiohttp', 'falcon', 'sanic', 'litestar'];
+  const ordered = [
+    'django',
+    'fastapi',
+    'flask',
+    'starlette',
+    'tornado',
+    'aiohttp',
+    'falcon',
+    'sanic',
+    'litestar',
+  ];
   for (const name of ordered) {
     if (blobs.includes(name)) return name;
   }
@@ -576,7 +586,8 @@ function detectPhpFramework(repoRoot: string): string | null {
     .join(' ')
     .toLowerCase();
   if (keys.includes('laravel/framework')) return 'laravel';
-  if (keys.includes('symfony/framework-bundle') || keys.includes('symfony/symfony')) return 'symfony';
+  if (keys.includes('symfony/framework-bundle') || keys.includes('symfony/symfony'))
+    return 'symfony';
   if (keys.includes('slim/slim')) return 'slim';
   if (keys.includes('cakephp/cakephp')) return 'cakephp';
   if (keys.includes('yiisoft/yii')) return 'yii';

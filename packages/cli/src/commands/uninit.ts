@@ -13,6 +13,7 @@ export interface UninitOptions {
 
 const GITIGNORE_ENTRIES = [
   '.engagement-harness/reports/',
+  '.engagement-harness/findings/',
   '.engagement-harness/feedback/feedback-*.json',
   '!.engagement-harness/feedback/metrics.json',
 ];
@@ -96,11 +97,7 @@ export async function runUninit(input: {
 
     if (!commitConfirmed) return;
 
-    const gitTargets = [
-      '.engagement-harness',
-      ...WORKFLOW_FILES,
-      '.gitignore',
-    ].join(' ');
+    const gitTargets = ['.engagement-harness', ...WORKFLOW_FILES, '.gitignore'].join(' ');
     execSync(`git add ${gitTargets}`, { cwd, stdio: 'pipe' });
 
     try {
@@ -137,11 +134,7 @@ export async function runUninit(input: {
   }
 
   log('');
-  log(
-    chalk.bold(
-      'Engagement Harness removed. Run `engagement-harness init` to start fresh.',
-    ),
-  );
+  log(chalk.bold('Engagement Harness removed. Run `engagement-harness init` to start fresh.'));
 }
 
 export async function uninitCommand(options: UninitOptions = {}): Promise<void> {

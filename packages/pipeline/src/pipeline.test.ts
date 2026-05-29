@@ -47,7 +47,9 @@ function makeBundle(): ContextBundle {
   };
 }
 
-function makeConfig(overrides: { blockOnPolicy?: boolean; confidenceThreshold?: number } = {}): Config {
+function makeConfig(
+  overrides: { blockOnPolicy?: boolean; confidenceThreshold?: number } = {},
+): Config {
   return ConfigSchema.parse({
     client: { name: 'TestCo', engagement: 'Pilot' },
     review: {
@@ -96,13 +98,19 @@ describe('FindingPipeline.process', () => {
 
   it('rejects malformed candidate at schema stage', async () => {
     const malformed = { id: '', title: '', category: 'security' } as unknown as CandidateFinding;
-    const result = await FindingPipeline.process([malformed, makeCandidate('F-001')], makeBundle(), makeConfig());
+    const result = await FindingPipeline.process(
+      [malformed, makeCandidate('F-001')],
+      makeBundle(),
+      makeConfig(),
+    );
     const schemaRejected = result.rejected.filter((r) => r.stage === 'schema');
     expect(schemaRejected.length).toBeGreaterThanOrEqual(1);
   });
 
   it('rejects finding with generic suggestedFix at verifier stage', async () => {
-    const candidate = makeCandidate('F-003', { suggestedFix: 'Consider refactoring this function.' });
+    const candidate = makeCandidate('F-003', {
+      suggestedFix: 'Consider refactoring this function.',
+    });
     const result = await FindingPipeline.process([candidate], makeBundle(), makeConfig());
     const verifierRejected = result.rejected.filter((r) => r.stage === 'verifier');
     expect(verifierRejected.length).toBeGreaterThanOrEqual(1);
@@ -206,7 +214,11 @@ describe('FindingPipeline.process', () => {
         clientRuleReferences: ['SEC-001'],
       });
     const bad = (id: string, lineStart: number) =>
-      makeCandidate(id, { lineStart, lineEnd: lineStart + 1, suggestedFix: 'Consider refactoring.' }); // verifier rejects
+      makeCandidate(id, {
+        lineStart,
+        lineEnd: lineStart + 1,
+        suggestedFix: 'Consider refactoring.',
+      }); // verifier rejects
 
     const candidates: CandidateFinding[] = [
       good('E2E-01', 10, 'high'),

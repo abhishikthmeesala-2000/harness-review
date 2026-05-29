@@ -147,9 +147,9 @@ describe('ConfidenceScorer.rollup', () => {
   });
 
   it('handles findings with no confidence by treating them as 0', () => {
-    const findings = [
-      makeCandidate({ dimension: 'security' }),
-    ] as (CandidateFinding & { confidence?: number })[];
+    const findings = [makeCandidate({ dimension: 'security' })] as (CandidateFinding & {
+      confidence?: number;
+    })[];
 
     const result = ConfidenceScorer.rollup(findings);
     expect(result.dimension['security']).toBe(0);

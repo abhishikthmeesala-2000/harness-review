@@ -139,8 +139,7 @@ const DEFAULT_FIXTURES: Record<string, string> = {
           content: 'ALTER TABLE payments ADD COLUMN amount_cents INTEGER NOT NULL;',
         },
       ],
-      whyItMatters:
-        'Non-nullable column with no default blocks existing rows during migration.',
+      whyItMatters: 'Non-nullable column with no default blocks existing rows during migration.',
       suggestedFix:
         'Add a DEFAULT or run a two-step migration (add nullable, backfill, then add NOT NULL constraint).',
       clientRuleReferences: [],
@@ -253,8 +252,20 @@ interface DiffContext {
 
 /** Extensions considered non-source (config, docs, lock files). */
 const NON_SOURCE_EXTENSIONS = new Set([
-  '.md', '.json', '.yaml', '.yml', '.toml', '.xml', '.txt',
-  '.lock', '.env', '.ini', '.cfg', '.conf', '.log', '.csv',
+  '.md',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.xml',
+  '.txt',
+  '.lock',
+  '.env',
+  '.ini',
+  '.cfg',
+  '.conf',
+  '.log',
+  '.csv',
 ]);
 
 function isSourceFile(path: string): boolean {
@@ -279,12 +290,18 @@ function parseDiffContext(prompt: string): DiffContext | null {
 
   for (const m of prompt.matchAll(/^--- (.+?) \(/gm)) {
     const candidate = m[1]?.trim();
-    if (candidate && isSourceFile(candidate)) { file = candidate; break; }
+    if (candidate && isSourceFile(candidate)) {
+      file = candidate;
+      break;
+    }
   }
   if (!file) {
     for (const m of prompt.matchAll(/^diff --git a\/(.+?) b\//gm)) {
       const candidate = m[1]?.trim();
-      if (candidate && isSourceFile(candidate)) { file = candidate; break; }
+      if (candidate && isSourceFile(candidate)) {
+        file = candidate;
+        break;
+      }
     }
   }
   if (!file) return null;
@@ -310,14 +327,14 @@ function parseDiffContext(prompt: string): DiffContext | null {
  * can confirm the finding is grounded in the actual diff.
  */
 const SECURITY_SIGNALS: RegExp[] = [
-  /\[REDACTED_SECRET\]/,                               // secret already caught by the redactor
-  /`[^`]*\$\{[^}]+\}[^`]*`/,                         // template literal SQL/injection
-  /password\s*[:=]\s*['"`][^'"`]{4,}/i,               // hardcoded password
-  /secret\s*[:=]\s*['"`][^'"`]{4,}/i,                 // hardcoded secret
-  /api.?key\s*[:=]\s*['"`][^'"`]{4,}/i,               // hardcoded API key
-  /\beval\s*\(/,                                       // eval()
-  /\bexec\s*\(/,                                       // exec()
-  /app\.\w+\s*\([^,)]+,\s*(?:async\s*)?\(req/,        // route handler (potential missing auth)
+  /\[REDACTED_SECRET\]/, // secret already caught by the redactor
+  /`[^`]*\$\{[^}]+\}[^`]*`/, // template literal SQL/injection
+  /password\s*[:=]\s*['"`][^'"`]{4,}/i, // hardcoded password
+  /secret\s*[:=]\s*['"`][^'"`]{4,}/i, // hardcoded secret
+  /api.?key\s*[:=]\s*['"`][^'"`]{4,}/i, // hardcoded API key
+  /\beval\s*\(/, // eval()
+  /\bexec\s*\(/, // exec()
+  /app\.\w+\s*\([^,)]+,\s*(?:async\s*)?\(req/, // route handler (potential missing auth)
 ];
 
 function findSuspiciousLine(addedLines: string[], signals: RegExp[]): string | null {
@@ -345,8 +362,9 @@ function patchFindings(raw: string, ctx: DiffContext, dimension: string): string
   }
   if (!Array.isArray(parsed)) return raw; // remediation object — leave untouched
 
-  const suspiciousLine =
-    dimension.includes('security') ? findSuspiciousLine(ctx.addedLines, SECURITY_SIGNALS) : null;
+  const suspiciousLine = dimension.includes('security')
+    ? findSuspiciousLine(ctx.addedLines, SECURITY_SIGNALS)
+    : null;
 
   const patched = (parsed as Record<string, unknown>[]).map((f) => {
     const updated: Record<string, unknown> = {

@@ -19,7 +19,9 @@ describe('PRIntentGapAgent', () => {
 
   it('returns schema-valid intent-gap candidates when prMetadata is provided', async () => {
     const agent = new PRIntentGapAgent();
-    const bundle = makeBundle({ prMetadata: { title: 'Read-only refactor', body: 'No writes introduced.' } });
+    const bundle = makeBundle({
+      prMetadata: { title: 'Read-only refactor', body: 'No writes introduced.' },
+    });
     const candidates = await agent.run(bundle, new MockProvider());
     expect(candidates.length).toBeGreaterThanOrEqual(1);
     assertAllValidCandidates(candidates);

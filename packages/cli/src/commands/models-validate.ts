@@ -40,9 +40,7 @@ export function modelsValidateCommand(): void {
       hasErrors = true;
     } else if (checkFn()) {
       // Provider available
-      console.log(
-        `  ${chalk.green('✓')} ${agentId.padEnd(22)} → ${provider}`,
-      );
+      console.log(`  ${chalk.green('✓')} ${agentId.padEnd(22)} → ${provider}`);
     } else {
       // Provider needs key — warn, don't fail
       const envVar = provider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY';

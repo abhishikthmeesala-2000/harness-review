@@ -10,3 +10,5 @@ export * from './pr-intent-gap.js';
 export * from './remediation.js';
 export * from './router.js';
 export * from './orchestrator.js';
+export * from './per-file-orchestrator.js';
+export * from './cross-file-reviewer.js';

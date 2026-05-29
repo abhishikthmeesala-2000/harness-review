@@ -150,6 +150,7 @@ function scaffoldDirectoryTree({ cwd, config }: ScaffoldOptions): string[] {
 
 const GITIGNORE_ENTRIES = [
   '.engagement-harness/reports/',
+  '.engagement-harness/findings/',
   '.engagement-harness/feedback/feedback-*.json',
   '!.engagement-harness/feedback/metrics.json',
 ];
@@ -251,12 +252,19 @@ export async function setupCiWorkflow(
 
     const setupConfirmed = options.yes
       ? true
-      : await confirm({ message: 'Set up GitHub Actions to run automatically on PRs?', default: true });
+      : await confirm({
+          message: 'Set up GitHub Actions to run automatically on PRs?',
+          default: true,
+        });
     if (!setupConfirmed) return;
 
     const workflowDir = path.join(cwd, '.github', 'workflows');
     mkdirSync(workflowDir, { recursive: true });
-    writeFileSync(path.join(workflowDir, 'engagement-harness.yml'), generateGithubWorkflow(cwd), 'utf8');
+    writeFileSync(
+      path.join(workflowDir, 'engagement-harness.yml'),
+      generateGithubWorkflow(cwd),
+      'utf8',
+    );
     console.log(chalk.green('✓') + ' Created .github/workflows/engagement-harness.yml');
 
     if (options.config.feedback.enabled) {
@@ -271,8 +279,14 @@ export async function setupCiWorkflow(
       : await confirm({ message: 'Commit the workflow file to Git?', default: true });
 
     if (commitConfirmed) {
-      execSync('git add .github/workflows/ .engagement-harness/ .gitignore', { cwd, stdio: 'pipe' });
-      execSync('git commit -m "ci: add Engagement Harness config and workflow"', { cwd, stdio: 'pipe' });
+      execSync('git add .github/workflows/ .engagement-harness/ .gitignore', {
+        cwd,
+        stdio: 'pipe',
+      });
+      execSync('git commit -m "ci: add Engagement Harness config and workflow"', {
+        cwd,
+        stdio: 'pipe',
+      });
       console.log(chalk.green('✓') + ' Changes committed');
     }
 
@@ -302,14 +316,18 @@ export async function setupCiWorkflow(
     console.log(`   Name:  ${chalk.yellow('ANTHROPIC_API_KEY')}`);
     console.log(`   Value: Your Anthropic API key`);
     console.log('');
-    console.log(chalk.green.bold('🎉 Setup complete! Open a PR to see Engagement Harness in action.'));
+    console.log(
+      chalk.green.bold('🎉 Setup complete! Open a PR to see Engagement Harness in action.'),
+    );
   } catch (err) {
     console.log(
       chalk.yellow('  Warning: CI setup encountered an error —') +
         ` ${err instanceof Error ? err.message : String(err)}`,
     );
     console.log(
-      chalk.dim('  Run `engagement-harness ci templates --platform github --write` to set up CI manually.'),
+      chalk.dim(
+        '  Run `engagement-harness ci templates --platform github --write` to set up CI manually.',
+      ),
     );
   }
 }
@@ -332,7 +350,10 @@ async function promptAnswersInteractive(
   }
 
   const clientName = await input({ message: 'Client name', default: defaults.clientName });
-  const engagement = await input({ message: 'Engagement name / phase', default: defaults.engagement });
+  const engagement = await input({
+    message: 'Engagement name / phase',
+    default: defaults.engagement,
+  });
 
   // Only ask about ALM platform if we could not detect it automatically.
   let almPlatform: AlmPlatform = defaults.almPlatform;

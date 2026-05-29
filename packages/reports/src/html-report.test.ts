@@ -81,7 +81,13 @@ describe('HtmlReport.generate', () => {
   it('shows no findings message when published is empty', () => {
     const result = makePipelineResult({
       published: [],
-      metrics: { totalCandidates: 0, publishedCount: 0, rejectedByStage: {}, verifierApprovalRate: 1, evidenceDistribution: { none: 0, weak: 0, medium: 0, strong: 0 } },
+      metrics: {
+        totalCandidates: 0,
+        publishedCount: 0,
+        rejectedByStage: {},
+        verifierApprovalRate: 1,
+        evidenceDistribution: { none: 0, weak: 0, medium: 0, strong: 0 },
+      },
     });
     const output = HtmlReport.generate(result, makeRunMetadata());
     expect(output).toContain('No findings published');

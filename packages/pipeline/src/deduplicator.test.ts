@@ -41,9 +41,27 @@ describe('Deduplicator.dedupe', () => {
 
   it('keeps the highest-confidence finding when duplicates share (file, lineStart, dimension)', () => {
     const findings = [
-      makeFinding({ id: 'D-001', confidence: 0.5, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
-      makeFinding({ id: 'D-002', confidence: 0.9, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
-      makeFinding({ id: 'D-003', confidence: 0.7, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
+      makeFinding({
+        id: 'D-001',
+        confidence: 0.5,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
+      makeFinding({
+        id: 'D-002',
+        confidence: 0.9,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
+      makeFinding({
+        id: 'D-003',
+        confidence: 0.7,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
     ];
     const { kept, dropped } = Deduplicator.dedupe(findings);
     expect(kept).toHaveLength(1);
@@ -53,8 +71,20 @@ describe('Deduplicator.dedupe', () => {
 
   it('sets dropped reason to "duplicate, lower confidence"', () => {
     const findings = [
-      makeFinding({ id: 'D-001', confidence: 0.6, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
-      makeFinding({ id: 'D-002', confidence: 0.9, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
+      makeFinding({
+        id: 'D-001',
+        confidence: 0.6,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
+      makeFinding({
+        id: 'D-002',
+        confidence: 0.9,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
     ];
     const { dropped } = Deduplicator.dedupe(findings);
     expect(dropped).toHaveLength(1);
@@ -93,8 +123,20 @@ describe('Deduplicator.dedupe', () => {
 
   it('handles equal confidence by keeping the first occurrence', () => {
     const findings = [
-      makeFinding({ id: 'D-001', confidence: 0.8, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
-      makeFinding({ id: 'D-002', confidence: 0.8, file: 'src/a.ts', lineStart: 10, dimension: 'security' }),
+      makeFinding({
+        id: 'D-001',
+        confidence: 0.8,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
+      makeFinding({
+        id: 'D-002',
+        confidence: 0.8,
+        file: 'src/a.ts',
+        lineStart: 10,
+        dimension: 'security',
+      }),
     ];
     const { kept, dropped } = Deduplicator.dedupe(findings);
     expect(kept).toHaveLength(1);

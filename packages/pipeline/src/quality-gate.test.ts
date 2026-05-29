@@ -97,10 +97,20 @@ describe('QualityGate.filter', () => {
 
   it('correctly splits a mixed batch', () => {
     const findings = [
-      makeFinding({ id: 'F1', confidence: 0.9, severity: 'high', verification: { status: 'approved', reason: 'ok' } }),
-      makeFinding({ id: 'F2', confidence: 0.5, severity: 'high' }),   // fails confidence
-      makeFinding({ id: 'F3', confidence: 0.8, severity: 'low' }),    // fails severity
-      makeFinding({ id: 'F4', confidence: 0.8, severity: 'medium', verification: { status: 'rejected', reason: 'bad' } }), // fails verification
+      makeFinding({
+        id: 'F1',
+        confidence: 0.9,
+        severity: 'high',
+        verification: { status: 'approved', reason: 'ok' },
+      }),
+      makeFinding({ id: 'F2', confidence: 0.5, severity: 'high' }), // fails confidence
+      makeFinding({ id: 'F3', confidence: 0.8, severity: 'low' }), // fails severity
+      makeFinding({
+        id: 'F4',
+        confidence: 0.8,
+        severity: 'medium',
+        verification: { status: 'rejected', reason: 'bad' },
+      }), // fails verification
     ];
     const { passed, failed } = QualityGate.filter(findings, makeConfig());
     expect(passed.map((f) => f.id)).toEqual(['F1']);
