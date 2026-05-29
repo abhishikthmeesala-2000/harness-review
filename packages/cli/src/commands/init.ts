@@ -150,6 +150,7 @@ function scaffoldDirectoryTree({ cwd, config }: ScaffoldOptions): string[] {
 
 const GITIGNORE_ENTRIES = [
   '.engagement-harness/reports/',
+  '.engagement-harness/findings/',
   '.engagement-harness/feedback/feedback-*.json',
   '!.engagement-harness/feedback/metrics.json',
 ];

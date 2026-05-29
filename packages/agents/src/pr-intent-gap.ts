@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, renderDiffSummary, renderFunctionContext } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFunctionContext } from './prompt-utils.js';
 
 export class PRIntentGapAgent extends BaseAgent {
   readonly id = 'pr-intent-gap';
@@ -65,6 +65,8 @@ export class PRIntentGapAgent extends BaseAgent {
       '',
       'CHANGED FUNCTIONS (the full function body for each diff hunk — helps assess whether changes match stated intent):',
       renderFunctionContext(context.diff, context.entries),
+      '',
+      SEVERITY_CRITERIA_BLOCK,
       '',
       FINDING_SCHEMA_BLOCK,
     ].join('\n');

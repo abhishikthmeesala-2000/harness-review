@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, renderDiffSummary, renderFunctionContext } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFunctionContext } from './prompt-utils.js';
 
 export class DomainPolicyAgent extends BaseAgent {
   readonly id = 'domain-policy';
@@ -47,6 +47,8 @@ export class DomainPolicyAgent extends BaseAgent {
       '',
       'CHANGED FUNCTIONS (the full function body containing each diff hunk — check rule applicability in full context):',
       renderFunctionContext(context.diff, context.entries),
+      '',
+      SEVERITY_CRITERIA_BLOCK,
       '',
       FINDING_SCHEMA_BLOCK,
     ].join('\n');

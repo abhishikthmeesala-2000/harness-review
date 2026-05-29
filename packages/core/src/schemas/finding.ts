@@ -55,6 +55,10 @@ const baseFindingShape = {
   sourceAgent: z.string().min(1, { message: 'sourceAgent is required' }),
   modelProvider: z.string().min(1, { message: 'modelProvider is required' }),
   remediationReadiness: RemediationReadinessSchema,
+  // Which review pass produced this finding: 'local' (per-file) or 'integration' (cross-file).
+  pass: z.enum(['local', 'integration']).optional(),
+  // Stable cross-run identity assigned by the FindingTracker.
+  fingerprint: z.string().optional(),
   metadata: z
     .object({
       runId: z.string().optional(),

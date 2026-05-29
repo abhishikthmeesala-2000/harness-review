@@ -3,6 +3,9 @@ import path from 'node:path';
 
 import {
   AgentOrchestrator,
+  CrossFileReviewer,
+  ModelRouter,
+  PerFileOrchestrator,
 } from '@engagement-harness/agents';
 import {
   ConfigLoader,
@@ -13,7 +16,7 @@ import {
   SecretRedactor,
 } from '@engagement-harness/core';
 import { GitHubCommenter } from '@engagement-harness/ci';
-import { FindingPipeline } from '@engagement-harness/pipeline';
+import { FindingPipeline, FindingTracker } from '@engagement-harness/pipeline';
 import { ReportGenerator, ReportWriter } from '@engagement-harness/reports';
 import chalk from 'chalk';
 
@@ -39,20 +42,17 @@ export interface ReviewOptions {
   head?: string;
 }
 
-function resolveCommitSha(repoRoot: string, ref: string): string {
-  try {
-    return execSync('git rev-parse ' + ref.replace(/[^a-zA-Z0-9._~^@{}/\\-]/g, ''), {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-  } catch {
-    return ref;
-  }
-}
-
 export function buildInlineCommentBody(
-  f: { title: string; severity: string; dimension?: string; whyItMatters: string; suggestedFix: string; sourceAgent: string; confidence?: number; id: string },
+  f: {
+    title: string;
+    severity: string;
+    dimension?: string;
+    whyItMatters: string;
+    suggestedFix: string;
+    sourceAgent: string;
+    confidence?: number;
+    id: string;
+  },
   runId: string,
 ): string {
   const pct = f.confidence !== undefined ? ` · confidence: ${Math.round(f.confidence * 100)}%` : '';
@@ -118,8 +118,7 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
 
   const config = ConfigLoader.load(repoRoot);
 
-  const baseRef =
-    options.base ?? process.env['GITHUB_BASE_REF'] ?? resolveMergeBase(repoRoot);
+  const baseRef = options.base ?? process.env['GITHUB_BASE_REF'] ?? resolveMergeBase(repoRoot);
   const headRef = options.head ?? process.env['GITHUB_SHA'] ?? 'HEAD';
 
   const prTitle = process.env['GITHUB_PR_TITLE'] ?? '';
@@ -142,7 +141,18 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   const bundle = SecretRedactor.redactBundle(rawBundle);
 
   const orchestrator = new AgentOrchestrator();
-  const candidates = await orchestrator.run(bundle, config);
+
+  // Pass 1: per-file analysis (all agents, one file at a time, in parallel).
+  const pass1Findings = await new PerFileOrchestrator(orchestrator).execute(bundle, config);
+
+  // Pass 2: cross-file integration analysis (skipped automatically for single-file PRs).
+  const crossFileProvider = ModelRouter.route('reviewer', config);
+  const pass2Findings = await new CrossFileReviewer(crossFileProvider).execute(
+    bundle,
+    pass1Findings,
+  );
+
+  const candidates = [...pass1Findings, ...pass2Findings];
 
   const result = await FindingPipeline.process(candidates, bundle, config);
 
@@ -158,6 +168,21 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
       ...(repository ? { repository } : {}),
     },
   }));
+
+  // Delta tracking only makes sense in CI (where a PR number is available).
+  // Local runs skip it and report all findings as normal.
+  let delta: Awaited<ReturnType<FindingTracker['filterNew']>> | null = null;
+  if (prNumber !== null) {
+    const tracker = new FindingTracker(repoRoot);
+    await tracker.load();
+    delta = tracker.filterNew(publishedWithMeta, prNumber);
+    await tracker.recordFindings(publishedWithMeta, prNumber);
+    console.log(
+      `\nDelta: ${delta.newFindings.length} new | ` +
+        `${delta.outstandingFindings.length} outstanding | ` +
+        `${delta.resolvedFindings.length} resolved`,
+    );
+  }
 
   const agentsRun = [...new Set(candidates.map((c) => c.sourceAgent))];
   const providersUsed = [...new Set(candidates.map((c) => c.modelProvider))];
@@ -175,24 +200,27 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
   const reports = ReportGenerator.generateAll(result, meta, config);
   ReportWriter.write(reports, path.join(repoRoot, config.reports.outputDir), runId);
 
-  // Post finding comments as issue comments (for feedback reaction collection)
-  if (config.ci.postComments && process.env['GITHUB_TOKEN']) {
-    if (prNumber !== null) {
-      try {
-        const ghRepo = process.env['GITHUB_REPOSITORY'] ?? '';
-        const [ghOwner, ghRepoName] = ghRepo.split('/');
-        if (ghOwner && ghRepoName) {
-          const commenter = new GitHubCommenter({
-            token: process.env['GITHUB_TOKEN'],
-            owner: ghOwner,
-            repo: ghRepoName,
-            runId,
-          });
-          await commenter.postFindings(publishedWithMeta, prNumber);
+  // Post comments as issue comments (for feedback reaction collection).
+  // New findings get individual inline comments; a summary comment always
+  // reflects the current new/outstanding/resolved state of the PR.
+  if (config.ci.postComments && process.env['GITHUB_TOKEN'] && prNumber !== null && delta) {
+    try {
+      const ghRepo = process.env['GITHUB_REPOSITORY'] ?? '';
+      const [ghOwner, ghRepoName] = ghRepo.split('/');
+      if (ghOwner && ghRepoName) {
+        const commenter = new GitHubCommenter({
+          token: process.env['GITHUB_TOKEN'],
+          owner: ghOwner,
+          repo: ghRepoName,
+          runId,
+        });
+        for (const finding of delta.newFindings) {
+          await commenter.postFindingComment(finding, prNumber);
         }
-      } catch {
-        // never fail the build because of comment errors
+        await commenter.postReviewSummary(prNumber, delta);
       }
+    } catch {
+      // never fail the build because of comment errors
     }
   }
 
@@ -226,12 +254,16 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
     const top = publishedWithMeta.slice(0, 3);
     for (const f of top) {
       const colorFn = SEVERITY_COLOR[f.severity] ?? chalk.white;
-      console.log(`  ${colorFn(`[${f.severity.toUpperCase()}]`)} ${f.file}:${f.lineStart}  ${f.title}`);
+      console.log(
+        `  ${colorFn(`[${f.severity.toUpperCase()}]`)} ${f.file}:${f.lineStart}  ${f.title}`,
+      );
     }
   }
 
   console.log('');
-  console.log(chalk.dim(`Reports written to ${path.join(config.reports.outputDir, `run-${runId}`)}`));
+  console.log(
+    chalk.dim(`Reports written to ${path.join(config.reports.outputDir, `run-${runId}`)}`),
+  );
 
   if (config.ci.blockOnPolicy && result.decision === 'blocked_by_policy') {
     process.exit(1);

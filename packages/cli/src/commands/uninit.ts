@@ -13,6 +13,7 @@ export interface UninitOptions {
 
 const GITIGNORE_ENTRIES = [
   '.engagement-harness/reports/',
+  '.engagement-harness/findings/',
   '.engagement-harness/feedback/feedback-*.json',
   '!.engagement-harness/feedback/metrics.json',
 ];

@@ -6,6 +6,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { evalCommand } from './commands/eval.js';
 import { feedbackCollectCommand, type FeedbackCollectOptions } from './commands/feedback-collect.js';
 import { feedbackImportCommand } from './commands/feedback-import.js';
+import { feedbackPilotReportCommand, type FeedbackPilotReportOptions } from './commands/feedback-pilot-report.js';
 import { feedbackReportCommand, type FeedbackReportOptions } from './commands/feedback-report.js';
 import { initCommand, type InitOptions } from './commands/init.js';
 import { uninitCommand, type UninitOptions } from './commands/uninit.js';
@@ -154,6 +155,13 @@ export function buildProgram(): Command {
     .option('--format <format>', 'output format: text|json', 'text')
     .action(async (options: FeedbackReportOptions) => {
       await feedbackReportCommand(options);
+    });
+  feedback
+    .command('pilot-report')
+    .description('Print a pilot program summary report')
+    .option('--days <number>', 'days to include (default: 14)', (v: string) => Number(v))
+    .action(async (options: FeedbackPilotReportOptions) => {
+      await feedbackPilotReportCommand(options);
     });
 
   program

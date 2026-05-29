@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
 
 const DATA_PATH_RE = /migration|schema|models\/|db\/|\.sql$/i;
 
@@ -73,6 +73,8 @@ export class DataArchitectureAgent extends BaseAgent {
       '',
       'FULL FILE CONTEXT (check for rollback paths, existing indices, backfill steps):',
       renderFileContext(context.entries),
+      '',
+      SEVERITY_CRITERIA_BLOCK,
       '',
       FINDING_SCHEMA_BLOCK,
     ].join('\n');

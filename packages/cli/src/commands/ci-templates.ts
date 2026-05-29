@@ -22,7 +22,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -62,6 +62,14 @@ jobs:
           printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
+      - name: Restore findings cache
+        uses: actions/cache@v3
+        with:
+          path: .engagement-harness/findings/
+          key: known-findings-pr-\${{ github.event.pull_request.number }}
+          restore-keys: |
+            known-findings-pr-\${{ github.event.pull_request.number }}
+
       - name: Run review
         env:
           ANTHROPIC_API_KEY: \${{ secrets.ANTHROPIC_API_KEY }}
@@ -71,6 +79,13 @@ jobs:
           GITHUB_PR_TITLE: \${{ github.event.pull_request.title }}
           GITHUB_PR_BODY: \${{ github.event.pull_request.body }}
         run: engagement-harness review --ci
+
+      - name: Save findings cache
+        if: always()
+        uses: actions/cache@v3
+        with:
+          path: .engagement-harness/findings/
+          key: known-findings-pr-\${{ github.event.pull_request.number }}
 
       - name: Upload reports
         if: always()
@@ -89,7 +104,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
@@ -124,6 +139,14 @@ jobs:
             | sudo tee /usr/local/bin/engagement-harness
           sudo chmod +x /usr/local/bin/engagement-harness
 
+      - name: Restore findings cache
+        uses: actions/cache@v3
+        with:
+          path: .engagement-harness/findings/
+          key: known-findings-pr-\${{ github.event.pull_request.number }}
+          restore-keys: |
+            known-findings-pr-\${{ github.event.pull_request.number }}
+
       - name: Run review
         env:
           GITHUB_TOKEN: \${{ secrets.GITHUB_TOKEN }}
@@ -133,6 +156,13 @@ jobs:
           GITHUB_PR_TITLE: \${{ github.event.pull_request.title }}
           GITHUB_PR_BODY: \${{ github.event.pull_request.body }}
         run: engagement-harness review --ci
+
+      - name: Save findings cache
+        if: always()
+        uses: actions/cache@v3
+        with:
+          path: .engagement-harness/findings/
+          key: known-findings-pr-\${{ github.event.pull_request.number }}
 
       - name: Upload reports
         if: always()

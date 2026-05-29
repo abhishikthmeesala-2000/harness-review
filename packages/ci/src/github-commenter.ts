@@ -7,6 +7,27 @@ export interface GitHubCommenterOptions {
   runId: string;
 }
 
+/**
+ * Structurally compatible with the pipeline's DeltaResult. Declared locally so
+ * the ci package need not depend on the pipeline package.
+ */
+export interface ReviewDelta {
+  newFindings: Finding[];
+  outstandingFindings: Finding[];
+  resolvedFindings: Array<{ finding: Finding }>;
+}
+
+const SEVERITY_EMOJI: Record<string, string> = {
+  critical: '🔴',
+  high: '🟠',
+  medium: '🟡',
+  low: '🔵',
+};
+
+function severityEmoji(severity: string): string {
+  return SEVERITY_EMOJI[severity] ?? '⚪';
+}
+
 export class GitHubCommenter {
   private readonly token: string;
   private readonly owner: string;
@@ -60,6 +81,99 @@ export class GitHubCommenter {
       '',
       `<!-- eh-metadata: ${parts.join(' ')} -->`,
     ].join('\n');
+  }
+
+  /** Post a single finding as an inline-style PR comment, tagged by review pass. */
+  async postFindingComment(finding: Finding, prNumber: number): Promise<void> {
+    await this.postComment(prNumber, this.formatFindingComment(finding));
+  }
+
+  formatFindingComment(finding: Finding): string {
+    const meta = [
+      `findingId=${finding.id}`,
+      `runId=${this.runId}`,
+      `sourceAgent=${finding.sourceAgent}`,
+      `severity=${finding.severity}`,
+      `pass=${finding.pass ?? 'local'}`,
+    ];
+
+    const emoji = severityEmoji(finding.severity);
+    const scope = finding.pass === 'integration' ? '🔗 Cross-file issue' : '📄 Local issue';
+    const evidence = finding.evidence.map((e) => e.content).join('\n');
+
+    return [
+      `${emoji} **[${finding.severity.toUpperCase()}] ${finding.title}**`,
+      '',
+      scope,
+      '',
+      `**What's wrong:** ${finding.whyItMatters}`,
+      '',
+      '**Evidence:**',
+      '```',
+      evidence,
+      '```',
+      '',
+      '**Suggested fix:**',
+      '```',
+      finding.suggestedFix,
+      '```',
+      '',
+      '---',
+      '**React:** 👍 Valid | 👎 False positive | 🚀 Fixed | 😕 Dismissed',
+      '',
+      `<!-- eh-metadata: ${meta.join(' ')} -->`,
+    ].join('\n');
+  }
+
+  /** Post one summary comment reflecting the current re-review state of the PR. */
+  async postReviewSummary(prNumber: number, delta: ReviewDelta): Promise<void> {
+    await this.postComment(prNumber, this.formatReviewSummary(delta));
+  }
+
+  formatReviewSummary(delta: ReviewDelta): string {
+    const lines: string[] = ['## 🔍 Engagement Harness Re-Review', ''];
+
+    if (delta.resolvedFindings.length > 0) {
+      lines.push(`### ✅ Resolved (${delta.resolvedFindings.length})`, '');
+      for (const { finding } of delta.resolvedFindings) {
+        lines.push(`- ~~${finding.title}~~ ✅`);
+      }
+      lines.push('');
+    }
+
+    if (delta.outstandingFindings.length > 0) {
+      lines.push(
+        `### ⚠️ Still Outstanding (${delta.outstandingFindings.length}) — please fix before merging`,
+        '',
+      );
+      for (const f of delta.outstandingFindings) {
+        lines.push(
+          `- ${severityEmoji(f.severity)} [${f.severity.toUpperCase()}] ${f.title} — \`${f.file}:${f.lineStart}\``,
+        );
+      }
+      lines.push('');
+    }
+
+    if (delta.newFindings.length > 0) {
+      lines.push(`### 🆕 New Issues (${delta.newFindings.length})`, '');
+      for (const f of delta.newFindings) {
+        lines.push(
+          `- ${severityEmoji(f.severity)} [${f.severity.toUpperCase()}] ${f.title} — \`${f.file}:${f.lineStart}\``,
+        );
+      }
+      lines.push('');
+    }
+
+    if (delta.outstandingFindings.length === 0 && delta.newFindings.length === 0) {
+      lines.push(
+        '### 🎉 All Issues Resolved!',
+        '',
+        'No outstanding or new issues found. Ready to merge.',
+        '',
+      );
+    }
+
+    return lines.join('\n').trimEnd();
   }
 
   private async postComment(prNumber: number, body: string): Promise<void> {

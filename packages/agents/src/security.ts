@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
+import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
 
 export class SecurityAgent extends BaseAgent {
   readonly id = 'security';
@@ -89,6 +89,8 @@ export class SecurityAgent extends BaseAgent {
       '',
       'FULL FILE CONTEXT (read carefully — check for mitigating factors before flagging):',
       renderFileContext(context.entries),
+      '',
+      SEVERITY_CRITERIA_BLOCK,
       '',
       FINDING_SCHEMA_BLOCK,
     ].join('\n');

@@ -2,6 +2,8 @@ export { ConfidenceScorer } from './confidence-scorer.js';
 export { Deduplicator } from './deduplicator.js';
 export { EvidenceScorer } from './evidence-scorer.js';
 export { FindingPipeline } from './pipeline.js';
+export { FindingTracker } from './finding-tracker.js';
+export type { DeltaResult, TrackedFinding } from './finding-tracker.js';
 export { PolicyEngine } from './policy-engine.js';
 export type { EvidenceLevel, PipelineMetrics, PipelineResult, RejectedEntry } from './types.js';
 export { QualityGate } from './quality-gate.js';

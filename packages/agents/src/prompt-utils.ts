@@ -34,6 +34,50 @@ export const FINDING_SCHEMA_BLOCK = `Return ONLY a JSON array. Each element must
 ]
 Return [] if you find nothing worth flagging. Do NOT wrap in markdown fences.`;
 
+/**
+ * Shared severity rubric appended to every finding agent's prompt so live LLMs
+ * grade severity consistently and conservatively. Includes concrete ✅/❌ code
+ * examples for each level plus the conservative-reporting rules.
+ */
+export const SEVERITY_CRITERIA_BLOCK = `SEVERITY CRITERIA — use EXACTLY these definitions:
+
+CRITICAL — Exploitable vulnerability or data loss risk. ONLY report if you can show a concrete exploit path.
+  ✅ REPORT as CRITICAL:
+    const q = "SELECT * FROM users WHERE id=" + req.body.id   // injectable: attacker sends ' OR 1=1 --
+    const STRIPE_KEY = "sk_live_51Hxyz1234567890"              // real production secret hardcoded
+  ❌ DO NOT report as CRITICAL (mitigated):
+    const id = parseInt(req.params.id, 10)
+    if (isNaN(id)) return res.status(400).send()
+    const q = "SELECT * WHERE id=" + id                        // guaranteed integer — not injectable
+
+HIGH — Bug causing incorrect behavior in production under reachable conditions. Describe the failure scenario.
+  ✅ REPORT as HIGH:
+    for (let i = 0; i < items.length - 1; i++) { process(items[i]) } // off-by-one: last item skipped
+    const user = db.findUser(id); return user.name                  // null deref if not found
+  ❌ DO NOT report as HIGH:
+    Theoretical issue with no reachable code path, or an edge case requiring impossible preconditions.
+
+MEDIUM — Fails under specific conditions or degrades reliability/maintainability significantly.
+  ✅ REPORT as MEDIUM:
+    let count = 0; async function increment() { count = count + 1 } // race under concurrency
+    fetchData().catch(() => {})                                     // errors silently swallowed
+  ❌ DO NOT report as MEDIUM:
+    Unlikely edge case with negligible real-world impact.
+
+LOW — Style, performance, or maintainability issue. Only report if clearly and obviously problematic.
+  ✅ REPORT as LOW:
+    users.forEach(u => { if (allUsers.find(x => x.id === u.id)) { ... } }) // O(n^2) where O(n) is easy
+    const isValid = validate(input)   // name misleads: returns an error string, not a boolean
+  ❌ DO NOT report as LOW:
+    Minor preference or subjective style opinion that could go either way.
+
+CONSERVATIVE REPORTING RULES:
+- Only report issues IN changed lines or CAUSED BY changes.
+- Set falsePositiveRisk by certainty: low = obvious, no mitigating factors; medium = likely, some context unclear; high = possible, significant uncertainty.
+- Do NOT report if falsePositiveRisk would be high.
+- Quote EXACT evidence from the file.
+- If uncertain, do not report.`;
+
 export function renderFileContext(entries: ContextEntry[]): string {
   const fileEntries = entries.filter(
     (e) =>
@@ -90,19 +134,35 @@ function extractContainingFunction(
       const next = line[j + 1] ?? '';
 
       if (inBlockComment) {
-        if (ch === '*' && next === '/') { inBlockComment = false; j++; }
+        if (ch === '*' && next === '/') {
+          inBlockComment = false;
+          j++;
+        }
         continue;
       }
       if (inLineComment) continue;
       if (stringChar !== null) {
-        if (ch === '\\') { j++; continue; } // escaped char
+        if (ch === '\\') {
+          j++;
+          continue;
+        } // escaped char
         if (ch === stringChar) stringChar = null;
         continue;
       }
 
-      if (ch === '/' && next === '/') { inLineComment = true; continue; }
-      if (ch === '/' && next === '*') { inBlockComment = true; j++; continue; }
-      if (ch === '"' || ch === "'" || ch === '`') { stringChar = ch; continue; }
+      if (ch === '/' && next === '/') {
+        inLineComment = true;
+        continue;
+      }
+      if (ch === '/' && next === '*') {
+        inBlockComment = true;
+        j++;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === '`') {
+        stringChar = ch;
+        continue;
+      }
 
       if (ch === '{') depth++;
       else if (ch === '}') {

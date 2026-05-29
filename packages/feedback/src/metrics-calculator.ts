@@ -51,4 +51,46 @@ export class MetricsCalculator {
       entries: items,
     };
   }
+
+  /**
+   * Flags when the overall false-positive rate exceeds the 20% pilot target and
+   * names the worst-offending agent so its prompt can be tightened.
+   */
+  calculateFalsePositiveAlert(metrics: FeedbackMetrics): FalsePositiveAlert | null {
+    const total = metrics.totalEntries;
+    if (total === 0) return null;
+
+    const falsePositives = metrics.byState.false_positive ?? 0;
+    const fpRate = falsePositives / total;
+    if (fpRate <= FP_ALERT_THRESHOLD) return null;
+
+    let worstAgent: string | undefined;
+    let worstRate = -1;
+    for (const [agent, m] of Object.entries(metrics.byAgent)) {
+      if (m.falsePositiveRate > worstRate) {
+        worstRate = m.falsePositiveRate;
+        worstAgent = agent;
+      }
+    }
+
+    const recommendation = worstAgent
+      ? `Add false positive patterns to the ${worstAgent} prompt (worst FP rate: ${(worstRate * 100).toFixed(0)}%).`
+      : 'Review agent prompts to reduce false positives.';
+
+    return {
+      fpRate,
+      worstAgent,
+      worstAgentRate: worstRate >= 0 ? worstRate : undefined,
+      recommendation,
+    };
+  }
+}
+
+const FP_ALERT_THRESHOLD = 0.2;
+
+export interface FalsePositiveAlert {
+  fpRate: number;
+  worstAgent?: string;
+  worstAgentRate?: number;
+  recommendation: string;
 }
