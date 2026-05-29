@@ -36,8 +36,20 @@ export const ConfigSchema = z
     providers: z
       .object({
         mock: z.object({}).default({}),
-        openai: z.object({ model: z.string().min(1) }).optional(),
-        anthropic: z.object({ model: z.string().min(1) }).optional(),
+        openai: z
+          .object({
+            model: z.string().min(1),
+            maxTokens: z.number().int().positive().optional(),
+            temperature: z.number().min(0).max(2).optional(),
+          })
+          .optional(),
+        anthropic: z
+          .object({
+            model: z.string().min(1),
+            maxTokens: z.number().int().positive().optional(),
+            temperature: z.number().min(0).max(2).optional(),
+          })
+          .optional(),
       })
       .default({ mock: {} }),
     context: z
