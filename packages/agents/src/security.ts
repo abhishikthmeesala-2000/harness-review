@@ -1,7 +1,13 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
+import {
+  FINDING_SCHEMA_BLOCK,
+  SEVERITY_CRITERIA_BLOCK,
+  renderDiffSummary,
+  renderFileContext,
+  renderFunctionContext,
+} from './prompt-utils.js';
 
 export class SecurityAgent extends BaseAgent {
   readonly id = 'security';

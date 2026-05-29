@@ -13,7 +13,10 @@ const SAMPLE_REPO = path.join(
 );
 
 function createFixtureRepo(configOverride?: object): string {
-  const tmpDir = path.join(os.tmpdir(), `eh-review-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  const tmpDir = path.join(
+    os.tmpdir(),
+    `eh-review-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
   mkdirSync(tmpDir, { recursive: true });
 
   // Copy fixture files
@@ -161,7 +164,11 @@ describe('reviewCommand', () => {
       client: { name: 'Test', engagement: 'test' },
       agents: { enabled: ['security'] },
       providers: { mock: {} },
-      review: { confidenceThreshold: 0.1, severityThreshold: 'low', requireVerifierApproval: false },
+      review: {
+        confidenceThreshold: 0.1,
+        severityThreshold: 'low',
+        requireVerifierApproval: false,
+      },
       ci: { blockOnPolicy: true, postComments: false, artifactsOnly: true },
       reports: { formats: ['json'], outputDir: '.engagement-harness/reports' },
     });
@@ -187,7 +194,11 @@ describe('reviewCommand', () => {
       client: { name: 'Test', engagement: 'test' },
       agents: { enabled: ['security'] },
       providers: { mock: {} },
-      review: { confidenceThreshold: 0.1, severityThreshold: 'low', requireVerifierApproval: false },
+      review: {
+        confidenceThreshold: 0.1,
+        severityThreshold: 'low',
+        requireVerifierApproval: false,
+      },
       alm: { platform: 'github' },
       ci: { blockOnPolicy: false, postComments: true, artifactsOnly: false },
       reports: { formats: ['json', 'markdown'], outputDir: '.engagement-harness/reports' },

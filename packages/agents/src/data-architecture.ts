@@ -1,15 +1,20 @@
 import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, SEVERITY_CRITERIA_BLOCK, renderDiffSummary, renderFileContext, renderFunctionContext } from './prompt-utils.js';
+import {
+  FINDING_SCHEMA_BLOCK,
+  SEVERITY_CRITERIA_BLOCK,
+  renderDiffSummary,
+  renderFileContext,
+  renderFunctionContext,
+} from './prompt-utils.js';
 
 const DATA_PATH_RE = /migration|schema|models\/|db\/|\.sql$/i;
 
 export class DataArchitectureAgent extends BaseAgent {
   readonly id = 'data-architecture';
   readonly dimension = 'data';
-  readonly description =
-    'Flags risky migrations, schema changes, missing indices, and ORM misuse.';
+  readonly description = 'Flags risky migrations, schema changes, missing indices, and ORM misuse.';
 
   promptTemplate(context: ContextBundle): string {
     const hasDataPaths = context.diff.some((f) => DATA_PATH_RE.test(f.path));
@@ -29,7 +34,7 @@ export class DataArchitectureAgent extends BaseAgent {
       '   Risk: fails on existing rows if table has data.',
       '   Mitigating factors: migration includes a prior step to backfill the column, or this is a new table with no existing data.',
       '   Vulnerable: `ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL;`',
-      '   Safe (do NOT flag): `ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT \'pending\';`',
+      "   Safe (do NOT flag): `ALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'pending';`",
       '',
       '2. Migration with no rollback / down path',
       '   Pattern: migration file has `up()` but no `down()`, or `down()` is empty/stubbed.',

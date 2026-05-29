@@ -42,7 +42,9 @@ describe('ProviderRegistry', () => {
       });
       const provider = ProviderRegistry.get('openai', config);
       expect(provider.name).toBe('openai');
-      await expect(provider.complete('hi')).rejects.toThrow('OPENAI_API_KEY environment variable not set');
+      await expect(provider.complete('hi')).rejects.toThrow(
+        'OPENAI_API_KEY environment variable not set',
+      );
     } finally {
       if (saved !== undefined) process.env['OPENAI_API_KEY'] = saved;
     }

@@ -159,9 +159,7 @@ export class ReactionCollector {
     const pulls = await this.ghFetch<GitHubPull[]>(
       `${this.base}/pulls?state=all&sort=updated&direction=desc&per_page=100`,
     );
-    return pulls
-      .filter((pr) => new Date(pr.updated_at) >= since)
-      .map((pr) => pr.number);
+    return pulls.filter((pr) => new Date(pr.updated_at) >= since).map((pr) => pr.number);
   }
 
   private async ghFetch<T>(url: string): Promise<T> {

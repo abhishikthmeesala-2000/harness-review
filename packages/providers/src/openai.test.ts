@@ -64,7 +64,9 @@ describe('OpenAIProvider', () => {
   it('throws clear error when OPENAI_API_KEY is not set', async () => {
     delete process.env['OPENAI_API_KEY'];
     const provider = new OpenAIProvider({ model: 'gpt-4o-mini' });
-    await expect(provider.complete('hello')).rejects.toThrow('OPENAI_API_KEY environment variable not set');
+    await expect(provider.complete('hello')).rejects.toThrow(
+      'OPENAI_API_KEY environment variable not set',
+    );
   });
 
   it('throws ProviderError on network failure', async () => {

@@ -12,7 +12,9 @@ export async function evalCommand(): Promise<void> {
     config = ConfigLoader.load(repoRoot);
   } catch {
     console.error(
-      chalk.red('No config found. Run `engagement-harness init` first, or run from your repo root.'),
+      chalk.red(
+        'No config found. Run `engagement-harness init` first, or run from your repo root.',
+      ),
     );
     process.exit(1);
   }
@@ -39,8 +41,8 @@ export async function evalCommand(): Promise<void> {
   );
   console.log(
     `Precision: ${pct(report.precision)}  ` +
-    `Recall: ${pct(report.recall)}  ` +
-    `(TP=${report.truePositives} FP=${report.falsePositives} FN=${report.falseNegatives})`,
+      `Recall: ${pct(report.recall)}  ` +
+      `(TP=${report.truePositives} FP=${report.falsePositives} FN=${report.falseNegatives})`,
   );
 
   if (report.failed > 0) process.exit(1);

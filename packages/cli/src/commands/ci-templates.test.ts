@@ -104,9 +104,7 @@ describe('ciTemplatesCommand', () => {
 
     it('prints bitbucket template to stdout by default', () => {
       ciTemplatesCommand({ platform: 'bitbucket' });
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('bitbucket-pipelines.yml'),
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('bitbucket-pipelines.yml'));
     });
   });
 

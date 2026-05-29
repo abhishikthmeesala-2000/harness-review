@@ -7,7 +7,10 @@ function dedupKey(f: Finding): string {
 }
 
 export const Deduplicator = {
-  dedupe(findings: Finding[]): { kept: Finding[]; dropped: (RejectedEntry & { finding: Finding })[] } {
+  dedupe(findings: Finding[]): {
+    kept: Finding[];
+    dropped: (RejectedEntry & { finding: Finding })[];
+  } {
     const best = new Map<string, Finding>();
 
     for (const f of findings) {

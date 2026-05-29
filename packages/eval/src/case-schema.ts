@@ -1,4 +1,8 @@
-import { FindingCategorySchema, FindingSeveritySchema, PolicyDecisionSchema } from '@engagement-harness/core';
+import {
+  FindingCategorySchema,
+  FindingSeveritySchema,
+  PolicyDecisionSchema,
+} from '@engagement-harness/core';
 import { z } from 'zod';
 
 export const ExpectedFindingSchema = z.object({

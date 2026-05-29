@@ -68,7 +68,24 @@ export async function remediateCommand(options: RemediateOptions): Promise<void>
   console.log(chalk.bold(`\nGenerating remediation plan for: ${finding.title}\n`));
 
   try {
-    const plan = await agent.remediate(finding, { entries: [], diff: [], repoProfile: { language: 'typescript', framework: null, packageManager: 'npm', testFramework: null, ciProvider: null, isMonorepo: false, importantPaths: [], suggestedIgnoredPaths: [] } }, provider);
+    const plan = await agent.remediate(
+      finding,
+      {
+        entries: [],
+        diff: [],
+        repoProfile: {
+          language: 'typescript',
+          framework: null,
+          packageManager: 'npm',
+          testFramework: null,
+          ciProvider: null,
+          isMonorepo: false,
+          importantPaths: [],
+          suggestedIgnoredPaths: [],
+        },
+      },
+      provider,
+    );
 
     console.log(`Finding: ${chalk.cyan(plan.findingId)}`);
     console.log(`Effort:  ${chalk.yellow(plan.estimatedEffort)}`);

@@ -37,7 +37,9 @@ export async function feedbackReportCommand(options: FeedbackReportOptions): Pro
     for (const [agent, m] of Object.entries(metrics.byAgent)) {
       const acc = (m.acceptanceRate * 100).toFixed(0);
       const fp = (m.falsePositiveRate * 100).toFixed(0);
-      console.log(`  ${agent}: ${m.totalFindings} findings — acceptance: ${acc}%, false_positive: ${fp}%`);
+      console.log(
+        `  ${agent}: ${m.totalFindings} findings — acceptance: ${acc}%, false_positive: ${fp}%`,
+      );
     }
   }
 }

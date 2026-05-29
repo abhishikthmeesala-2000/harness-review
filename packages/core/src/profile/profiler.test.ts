@@ -223,10 +223,7 @@ describe('RepoProfiler', () => {
   });
 
   it('detects chi router', () => {
-    write(
-      'go.mod',
-      'module example.com/demo\n\ngo 1.22\n\nrequire github.com/go-chi/chi v5.0.0\n',
-    );
+    write('go.mod', 'module example.com/demo\n\ngo 1.22\n\nrequire github.com/go-chi/chi v5.0.0\n');
     write('main.go', 'package main\n');
 
     const p = RepoProfiler.detect(dir);
@@ -245,10 +242,7 @@ describe('RepoProfiler', () => {
   // ── Ruby ────────────────────────────────────────────────────────────────────
 
   it('detects Ruby + Rails + RSpec', () => {
-    write(
-      'Gemfile',
-      "source 'https://rubygems.org'\ngem 'rails', '~> 7.0'\ngem 'rspec-rails'\n",
-    );
+    write('Gemfile', "source 'https://rubygems.org'\ngem 'rails', '~> 7.0'\ngem 'rspec-rails'\n");
     write('Gemfile.lock', '');
     write('app/controllers/application_controller.rb', '');
     write('spec/spec_helper.rb', '');
@@ -274,10 +268,10 @@ describe('RepoProfiler', () => {
   it('detects Java + Spring Boot + JUnit via pom.xml', () => {
     write(
       'pom.xml',
-      '<project><dependencies>'
-        + '<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter</artifactId></dependency>'
-        + '<dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId></dependency>'
-        + '</dependencies></project>',
+      '<project><dependencies>' +
+        '<dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter</artifactId></dependency>' +
+        '<dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId></dependency>' +
+        '</dependencies></project>',
     );
     write('src/main/java/App.java', 'public class App {}');
 
@@ -382,8 +376,8 @@ describe('RepoProfiler', () => {
   it('detects C# + ASP.NET Core + xUnit from .csproj', () => {
     write(
       'MyApp.csproj',
-      '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>'
-        + '<ItemGroup><PackageReference Include="xunit" Version="2.6.0" /></ItemGroup></Project>',
+      '<Project Sdk="Microsoft.NET.Sdk.Web"><PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>' +
+        '<ItemGroup><PackageReference Include="xunit" Version="2.6.0" /></ItemGroup></Project>',
     );
     write('Program.cs', 'using Microsoft.AspNetCore.Builder;');
     write('Controllers/HomeController.cs', 'public class HomeController {}');
@@ -424,9 +418,7 @@ describe('RepoProfiler', () => {
     expect(p.language).toBe('elixir');
     expect(p.framework).toBe('phoenix');
     expect(p.packageManager).toBe('mix');
-    expect(p.suggestedIgnoredPaths).toEqual(
-      expect.arrayContaining(['**/_build/**', '**/deps/**']),
-    );
+    expect(p.suggestedIgnoredPaths).toEqual(expect.arrayContaining(['**/_build/**', '**/deps/**']));
   });
 
   // ── CI providers ─────────────────────────────────────────────────────────────

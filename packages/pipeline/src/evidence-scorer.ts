@@ -14,11 +14,7 @@ function extractIdents(text: string): string[] {
   return text.match(/[a-zA-Z_$][a-zA-Z0-9_$.]{3,}/g) ?? [];
 }
 
-function scoreItem(
-  content: string,
-  filePath: string,
-  diffLines: string[],
-): EvidenceLevel {
+function scoreItem(content: string, filePath: string, diffLines: string[]): EvidenceLevel {
   // Strong: evidence contains a verbatim diff line of ≥10 chars
   if (diffLines.length > 0) {
     for (const line of diffLines) {

@@ -29,8 +29,8 @@ describe('GitHubAlm', () => {
       expect(url).toBe('https://api.github.com/repos/acme/backend/pulls/42/comments');
       expect(init.method).toBe('POST');
       expect(init.headers).toMatchObject({
-        'Authorization': `Bearer ${TOKEN}`,
-        'Accept': 'application/vnd.github+json',
+        Authorization: `Bearer ${TOKEN}`,
+        Accept: 'application/vnd.github+json',
       });
 
       const body = JSON.parse(init.body as string);

@@ -1,7 +1,14 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { Config, ContextBundle, ContextEntry, FileDiff, Finding, PolicyDecision } from '@engagement-harness/core';
+import type {
+  Config,
+  ContextBundle,
+  ContextEntry,
+  FileDiff,
+  Finding,
+  PolicyDecision,
+} from '@engagement-harness/core';
 import { parseUnifiedDiff } from '@engagement-harness/core';
 import { AgentOrchestrator } from '@engagement-harness/agents';
 import { FindingPipeline } from '@engagement-harness/pipeline';
@@ -231,16 +238,16 @@ export class EvalRunner {
     if (expected.severity !== undefined && finding.severity !== expected.severity) return false;
 
     // File must match the fileGlob.
-    if (expected.fileGlob !== '**' && micromatch([finding.file], [expected.fileGlob]).length === 0) {
+    if (
+      expected.fileGlob !== '**' &&
+      micromatch([finding.file], [expected.fileGlob]).length === 0
+    ) {
       return false;
     }
 
     // All mustMatchPhrases must appear in the finding title or any evidence content.
     if (expected.mustMatchPhrases.length > 0) {
-      const haystack = [
-        finding.title,
-        ...finding.evidence.map((e) => e.content),
-      ]
+      const haystack = [finding.title, ...finding.evidence.map((e) => e.content)]
         .join(' ')
         .toLowerCase();
       const allMatch = expected.mustMatchPhrases.every((phrase) =>
@@ -255,8 +262,7 @@ export class EvalRunner {
   private static countFalsePositives(evalCase: EvalCase, findings: Finding[]): number {
     // Findings not covered by any expectedFinding are false positives.
     if (evalCase.expectedFindings.length === 0) return findings.length;
-    return findings.filter(
-      (f) => !evalCase.expectedFindings.some((e) => e.category === f.category),
-    ).length;
+    return findings.filter((f) => !evalCase.expectedFindings.some((e) => e.category === f.category))
+      .length;
   }
 }

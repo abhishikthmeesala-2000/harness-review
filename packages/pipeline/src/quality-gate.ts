@@ -8,10 +8,7 @@ const SEVERITY_RANK: Record<string, number> = {
 };
 
 export const QualityGate = {
-  filter(
-    findings: Finding[],
-    config: Config,
-  ): { passed: Finding[]; failed: Finding[] } {
+  filter(findings: Finding[], config: Config): { passed: Finding[]; failed: Finding[] } {
     const { confidenceThreshold, severityThreshold } = config.review;
     const minRank = SEVERITY_RANK[severityThreshold] ?? 0;
 

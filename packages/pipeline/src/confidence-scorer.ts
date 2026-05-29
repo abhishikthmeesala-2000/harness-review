@@ -34,9 +34,10 @@ export const ConfidenceScorer = {
     return Math.min(1, Math.max(0, Math.round(score * 10000) / 10000));
   },
 
-  rollup(
-    findings: (CandidateFinding & { confidence?: number })[],
-  ): { dimension: Record<string, number>; overall: number } {
+  rollup(findings: (CandidateFinding & { confidence?: number })[]): {
+    dimension: Record<string, number>;
+    overall: number;
+  } {
     if (findings.length === 0) {
       return { dimension: {}, overall: 1.0 };
     }

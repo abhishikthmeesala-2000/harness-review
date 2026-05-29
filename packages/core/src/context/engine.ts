@@ -6,7 +6,13 @@ import micromatch from 'micromatch';
 import type { Config } from '../schemas/config.js';
 import type { FileDiff } from '../git/diff-parser.js';
 import type { RepoProfile } from '../profile/profiler.js';
-import type { ContextBundle, ContextEntry, ContextEntryKind, PrMetadata, RunMetadata } from './types.js';
+import type {
+  ContextBundle,
+  ContextEntry,
+  ContextEntryKind,
+  PrMetadata,
+  RunMetadata,
+} from './types.js';
 
 const PRIORITY: Record<ContextEntryKind, number> = {
   'changed-file': 100,
