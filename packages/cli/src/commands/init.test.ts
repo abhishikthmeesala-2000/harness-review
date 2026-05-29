@@ -2,12 +2,13 @@ import { execSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ConfigLoader } from '@engagement-harness/core';
+import { ConfigLoader, DEFAULT_AGENT_IDS } from '@engagement-harness/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CliError } from '../utils/errors.js';
 import {
   buildConfigFromAnswers,
   defaultAnswersFromProfile,
+  generateConfigMd,
   initCommand,
   runInit,
   setupCiWorkflow,
@@ -42,10 +43,43 @@ describe('buildConfigFromAnswers', () => {
     expect(config.alm.platform).toBe('github');
     expect(config.context.ignoredPaths).toEqual(['**/node_modules/**']);
     expect(config.agents.enabled.length).toBeGreaterThan(0);
+    // Enabled agents get the provider; others get 'mock'
     for (const id of config.agents.enabled) {
       expect(config.models[id]).toBe('anthropic');
     }
-    expect(config.providers.anthropic).toEqual({ model: 'claude-haiku-4-5-20251001' });
+    // Agents not in enabledAgents should be 'mock'
+    for (const id of DEFAULT_AGENT_IDS) {
+      if (!config.agents.enabled.includes(id)) {
+        expect(config.models[id]).toBe('mock');
+      }
+    }
+    // Provider config reflects chosen model
+    expect(config.providers.anthropic?.model).toBe('claude-sonnet-4-20250514');
+    expect(config.providers.anthropic?.maxTokens).toBe(4096);
+  });
+
+  it('builds config with openai provider', () => {
+    const profile = {
+      language: 'typescript' as const,
+      framework: null,
+      packageManager: 'pnpm' as const,
+      testFramework: null,
+      ciProvider: 'github' as const,
+      isMonorepo: false,
+      importantPaths: ['src'],
+      suggestedIgnoredPaths: [],
+    };
+    const answers = {
+      ...defaultAnswersFromProfile('/tmp/my-repo', profile),
+      provider: 'openai' as const,
+      model: 'gpt-4-turbo',
+      enabledAgents: ['security', 'testing'],
+    };
+    const config = buildConfigFromAnswers(answers);
+    expect(config.providers.openai?.model).toBe('gpt-4-turbo');
+    expect(config.providers.anthropic).toBeUndefined();
+    expect(config.models['security']).toBe('openai');
+    expect(config.models['reviewer']).toBe('mock');
   });
 });
 
@@ -149,5 +183,77 @@ describe('initCommand', () => {
   it('runs through with --yes', async () => {
     await initCommand({ cwd: dir, yes: true });
     expect(ConfigLoader.exists(dir)).toBe(true);
+  });
+});
+
+describe('runInit --yes smart defaults', () => {
+  it('sets security and testing to anthropic by default', async () => {
+    await runInit({ cwd: dir, yes: true, log: noopLog });
+    const config = ConfigLoader.load(dir);
+    expect(config.models['security']).toBe('anthropic');
+    expect(config.models['testing']).toBe('anthropic');
+  });
+
+  it('sets postComments to true by default', async () => {
+    await runInit({ cwd: dir, yes: true, log: noopLog });
+    const config = ConfigLoader.load(dir);
+    expect(config.ci.postComments).toBe(true);
+  });
+
+  it('writes CONFIG.md alongside config.json', async () => {
+    await runInit({ cwd: dir, yes: true, log: noopLog });
+    const configMdPath = path.join(dir, '.engagement-harness', 'CONFIG.md');
+    expect(existsSync(configMdPath)).toBe(true);
+    const content = readFileSync(configMdPath, 'utf8');
+    expect(content).toContain('Engagement Harness Configuration Reference');
+    expect(content).toContain('security');
+    expect(content).toContain('ci.postComments');
+  });
+});
+
+describe('generateConfigMd', () => {
+  it('contains the client name', () => {
+    const profile = {
+      language: 'typescript' as const,
+      framework: null,
+      packageManager: 'pnpm' as const,
+      testFramework: null,
+      ciProvider: 'github' as const,
+      isMonorepo: false,
+      importantPaths: ['src'],
+      suggestedIgnoredPaths: [],
+    };
+    const answers = defaultAnswersFromProfile('/tmp/acme-corp', profile);
+    const config = buildConfigFromAnswers(answers);
+    const md = generateConfigMd(config);
+    expect(md).toContain('acme-corp');
+    expect(md).toContain('security');
+    expect(md).toContain('ci.postComments');
+    expect(md).toContain('anthropic');
+  });
+
+  it('marks enabled agents and mock agents correctly', () => {
+    const profile = {
+      language: 'typescript' as const,
+      framework: null,
+      packageManager: 'pnpm' as const,
+      testFramework: null,
+      ciProvider: 'none' as const,
+      isMonorepo: false,
+      importantPaths: [],
+      suggestedIgnoredPaths: [],
+    };
+    const answers = {
+      ...defaultAnswersFromProfile('/tmp/test', profile),
+      enabledAgents: ['security'],
+      provider: 'anthropic' as const,
+      model: 'claude-sonnet-4-20250514',
+    };
+    const config = buildConfigFromAnswers(answers);
+    const md = generateConfigMd(config);
+    // security is enabled
+    expect(md).toMatch(/security.*✓/);
+    // reviewer is disabled (mock)
+    expect(md).toMatch(/reviewer.*—/);
   });
 });

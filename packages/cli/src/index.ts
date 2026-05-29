@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { agentsListCommand } from './commands/agents-list.js';
 import { ciTemplatesCommand, type CiTemplatesOptions } from './commands/ci-templates.js';
 import { configValidateCommand } from './commands/config-validate.js';
-import { doctorCommand } from './commands/doctor.js';
+import { doctorCommand, type DoctorOptions } from './commands/doctor.js';
 import { evalCommand } from './commands/eval.js';
 import {
   feedbackCollectCommand,
@@ -53,8 +53,9 @@ export function buildProgram(): Command {
   program
     .command('doctor')
     .description('Validate installation, config, and environment')
-    .action(() => {
-      doctorCommand();
+    .option('--fix', 'auto-fix common configuration issues')
+    .action((options: DoctorOptions) => {
+      doctorCommand(options);
     });
 
   program
