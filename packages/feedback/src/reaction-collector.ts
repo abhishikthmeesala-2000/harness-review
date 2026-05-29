@@ -48,61 +48,88 @@ export class ReactionCollector {
     const items: FeedbackItem[] = [];
 
     for (const prNum of prNumbers) {
-      let comments: GitHubComment[];
-      try {
-        comments = await this.ghFetch<GitHubComment[]>(
-          `${this.base}/issues/${prNum}/comments?per_page=100`,
-        );
-      } catch (err) {
-        console.warn(`  [warn] PR #${prNum}: failed to fetch comments — ${String(err)}`);
-        continue;
-      }
+      // Conversation (issue) comments — used for summary/fallback comments.
+      const issueComments = await this.fetchComments(
+        `${this.base}/issues/${prNum}/comments?per_page=100`,
+        prNum,
+        'conversation',
+      );
+      await this.collectFromComments(issueComments, prNum, 'issues', items);
 
-      const ehComments = comments.filter((c) => this.isEhComment(c));
-
-      for (const comment of ehComments) {
-        const metadata = this.extractMetadata(comment.body);
-        if (!metadata) continue;
-
-        const findingId = metadata['findingId'];
-        const runId = metadata['runId'];
-        if (!findingId || !runId) continue;
-
-        let reactions: GitHubReaction[];
-        try {
-          reactions = await this.ghFetch<GitHubReaction[]>(
-            `${this.base}/issues/comments/${comment.id}/reactions`,
-          );
-        } catch (err) {
-          console.warn(
-            `  [warn] comment ${comment.id} (${findingId}): failed to fetch reactions — ${String(err)}`,
-          );
-          continue;
-        }
-
-        const counts = this.countReactions(reactions);
-        const state = this.mapReactionsToState(counts);
-        if (state === 'ignored') continue;
-
-        items.push({
-          findingId,
-          runId,
-          state,
-          prNumber: prNum,
-          repository: `${this.owner}/${this.repo}`,
-          commentId: comment.id,
-          reactions: counts,
-          timestamp: new Date().toISOString(),
-          metadata: {
-            sourceAgent: metadata['sourceAgent'],
-            dimension: metadata['dimension'],
-            severity: metadata['severity'],
-          },
-        });
-      }
+      // Inline review comments — used for per-finding comments in the diff.
+      const reviewComments = await this.fetchComments(
+        `${this.base}/pulls/${prNum}/comments?per_page=100`,
+        prNum,
+        'review',
+      );
+      await this.collectFromComments(reviewComments, prNum, 'pulls', items);
     }
 
     return { collected: items, prNumbers };
+  }
+
+  private async fetchComments(url: string, prNum: number, label: string): Promise<GitHubComment[]> {
+    try {
+      return await this.ghFetch<GitHubComment[]>(url);
+    } catch (err) {
+      console.warn(`  [warn] PR #${prNum}: failed to fetch ${label} comments — ${String(err)}`);
+      return [];
+    }
+  }
+
+  /**
+   * Process a batch of comments, reading reactions from the matching endpoint.
+   * `scope` selects the reactions API: 'issues' for conversation comments,
+   * 'pulls' for inline review comments.
+   */
+  private async collectFromComments(
+    comments: GitHubComment[],
+    prNum: number,
+    scope: 'issues' | 'pulls',
+    items: FeedbackItem[],
+  ): Promise<void> {
+    const ehComments = comments.filter((c) => this.isEhComment(c));
+
+    for (const comment of ehComments) {
+      const metadata = this.extractMetadata(comment.body);
+      if (!metadata) continue;
+
+      const findingId = metadata['findingId'];
+      const runId = metadata['runId'];
+      if (!findingId || !runId) continue;
+
+      let reactions: GitHubReaction[];
+      try {
+        reactions = await this.ghFetch<GitHubReaction[]>(
+          `${this.base}/${scope}/comments/${comment.id}/reactions`,
+        );
+      } catch (err) {
+        console.warn(
+          `  [warn] comment ${comment.id} (${findingId}): failed to fetch reactions — ${String(err)}`,
+        );
+        continue;
+      }
+
+      const counts = this.countReactions(reactions);
+      const state = this.mapReactionsToState(counts);
+      if (state === 'ignored') continue;
+
+      items.push({
+        findingId,
+        runId,
+        state,
+        prNumber: prNum,
+        repository: `${this.owner}/${this.repo}`,
+        commentId: comment.id,
+        reactions: counts,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          sourceAgent: metadata['sourceAgent'],
+          dimension: metadata['dimension'],
+          severity: metadata['severity'],
+        },
+      });
+    }
   }
 
   private extractMetadata(body: string): Record<string, string> | null {

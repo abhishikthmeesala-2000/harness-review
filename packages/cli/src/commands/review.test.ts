@@ -183,7 +183,16 @@ describe('reviewCommand', () => {
   });
 
   it('posts inline comment per finding when postComments is true', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 201 });
+    // Resolve PR head SHA (GET /pulls/{n}) returns json; all other calls just succeed.
+    const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
+      const isHeadShaResolve =
+        url.includes('/pulls/') && !url.endsWith('/comments') && (init?.method ?? 'GET') === 'GET';
+      return Promise.resolve({
+        ok: true,
+        status: isHeadShaResolve ? 200 : 201,
+        json: async () => (isHeadShaResolve ? { head: { sha: 'deadbeefcafe' } } : {}),
+      });
+    });
     vi.stubGlobal('fetch', fetchMock);
 
     process.env['GITHUB_TOKEN'] = 'ghp_test';
@@ -207,9 +216,12 @@ describe('reviewCommand', () => {
 
     await reviewCommand({ ci: true, base: 'HEAD~1', head: 'HEAD' });
 
-    // If any findings were published, inline comment calls precede summary call
-    const pullCalls = fetchMock.mock.calls.filter(([url]: [string]) =>
-      (url as string).includes('/pulls/'),
+    // Inline review-comment POSTs only (exclude the GET /pulls/{n} head-SHA resolve).
+    const pullCalls = fetchMock.mock.calls.filter(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        (url as string).includes('/pulls/') &&
+        (url as string).endsWith('/comments') &&
+        (init?.method ?? 'GET') === 'POST',
     );
     const issueCalls = fetchMock.mock.calls.filter(([url]: [string]) =>
       (url as string).includes('/issues/'),
