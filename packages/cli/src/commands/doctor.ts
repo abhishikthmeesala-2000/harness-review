@@ -1,11 +1,10 @@
 import { execSync } from 'node:child_process';
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { accessSync, constants, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
 import {
   ConfigInvalidError,
   ConfigLoader,
   ConfigNotFoundError,
-  DEFAULT_AGENT_IDS,
   type Config,
 } from '@engagement-harness/core';
 import chalk from 'chalk';
