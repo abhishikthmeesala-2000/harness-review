@@ -26,6 +26,21 @@ export class AnthropicProvider implements Provider {
       );
     }
 
+    const thinkingBudget = options?.extendedThinking;
+    const useThinking = thinkingBudget !== undefined && thinkingBudget > 0;
+
+    const body: Record<string, unknown> = {
+      model: this.config.model || 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: options?.maxTokens ?? 4000,
+      // Extended thinking requires temperature=1; otherwise use 0.1 for precise analysis.
+      temperature: useThinking ? 1 : (options?.temperature ?? 0.1),
+    };
+    if (options?.system) body['system'] = options.system;
+    if (useThinking) {
+      body['thinking'] = { type: 'enabled', budget_tokens: thinkingBudget };
+    }
+
     let response: Response;
     try {
       response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -35,12 +50,7 @@ export class AnthropicProvider implements Provider {
           'anthropic-version': '2023-06-01',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          model: this.config.model || 'claude-sonnet-4-20250514',
-          messages: [{ role: 'user', content: prompt }],
-          max_tokens: options?.maxTokens ?? 4000,
-          temperature: options?.temperature ?? 0.7,
-        }),
+        body: JSON.stringify(body),
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -68,9 +78,13 @@ export class AnthropicProvider implements Provider {
       throw new ProviderError('Anthropic returned malformed JSON response', 'anthropic');
     }
 
-    const block = data.content?.[0];
-    if (!block || block.type !== 'text' || typeof block.text !== 'string') {
-      throw new ProviderError('Anthropic response missing content[0].text', 'anthropic');
+    // Extended thinking prepends thinking blocks before text blocks; find the first text block.
+    const block = data.content?.find((b) => b.type === 'text');
+    if (!block || typeof block.text !== 'string') {
+      throw new ProviderError(
+        'Anthropic response contains no text content block',
+        'anthropic',
+      );
     }
 
     const tokensUsed =

@@ -36,9 +36,12 @@ export class OpenAIProvider implements Provider {
         },
         body: JSON.stringify({
           model: this.config.model || 'gpt-4o-mini',
-          messages: [{ role: 'user', content: prompt }],
+          messages: [
+            ...(options?.system ? [{ role: 'system', content: options.system }] : []),
+            { role: 'user', content: prompt },
+          ],
           max_tokens: options?.maxTokens ?? 4000,
-          temperature: options?.temperature ?? 0.7,
+          temperature: options?.temperature ?? 0.1,
         }),
       });
     } catch (err) {

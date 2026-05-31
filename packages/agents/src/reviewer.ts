@@ -15,9 +15,24 @@ export class ReviewerAgent extends BaseAgent {
   readonly description =
     'Looks for logic bugs, off-by-one errors, edge cases, null handling, and risky behavior changes.';
 
+  override systemPrompt(): string {
+    return [
+      'You are a principal software engineer with 15+ years of experience reviewing production TypeScript and JavaScript codebases at high-traffic companies.',
+      'You have caught hundreds of real bugs in code review — subtle logic errors, off-by-one mistakes, race conditions, null dereferences — and have equally learned to recognize intentional patterns that look wrong but are not.',
+      'You are methodical: before flagging anything you mentally trace execution paths, consider edge inputs, and ask whether the apparent bug is actually correct-by-design.',
+      'You report only findings you could defend in a code review discussion with the author.',
+      'You prefer false negatives over false positives — staying silent when uncertain is the right call.',
+    ].join(' ');
+  }
+
+  override completionOptions() {
+    // Extended thinking gives the reviewer a scratchpad to trace logic paths
+    // before committing to a finding — dramatically reduces false positives.
+    return { extendedThinking: 8000 };
+  }
+
   promptTemplate(context: ContextBundle): string {
     return [
-      'You are the Reviewer agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       '',
       'ROLE',
@@ -71,6 +86,10 @@ export class ReviewerAgent extends BaseAgent {
       renderFileContext(context.entries),
       '',
       SEVERITY_CRITERIA_BLOCK,
+      '',
+      'BEFORE PRODUCING FINDINGS',
+      'For each candidate issue, confirm all three: (1) I can point to the exact line where the bug manifests, (2) I can explain specifically why the code is wrong — not just "could be wrong" — given the full context, (3) I have checked for mitigating factors and none apply.',
+      'Only include findings that pass all three checks.',
       '',
       FINDING_SCHEMA_BLOCK,
     ].join('\n');
