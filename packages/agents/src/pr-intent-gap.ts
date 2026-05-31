@@ -14,6 +14,16 @@ export class PRIntentGapAgent extends BaseAgent {
   readonly description =
     'Identifies gaps between the stated PR intent (title/body) and actual changes.';
 
+  override systemPrompt(): string {
+    return [
+      'You are a senior engineering manager who has reviewed thousands of pull requests.',
+      'You protect the team from scope creep, hidden changes, and undescribed side effects.',
+      'You read PR descriptions precisely and compare them against diffs literally.',
+      'You only flag gaps that would cause a reviewer to miss something important — not minor omissions.',
+      'You are not pedantic about description completeness; you care about changes invisible to reviewers.',
+    ].join(' ');
+  }
+
   promptTemplate(context: ContextBundle): string {
     if (!context.prMetadata?.title && !context.prMetadata?.body) return '';
 

@@ -9,7 +9,7 @@ import {
   renderFunctionContext,
 } from './prompt-utils.js';
 
-const DATA_PATH_RE = /migration|schema|models\/|db\/|\.sql$/i;
+const DATA_PATH_RE = /migration|schema|models?\/|db\/|database|prisma|drizzle|knex|sequelize|typeorm|\.sql$/i;
 
 export class DataArchitectureAgent extends BaseAgent {
   readonly id = 'data-architecture';
