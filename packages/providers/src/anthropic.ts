@@ -5,8 +5,13 @@ export interface AnthropicProviderConfig {
   model: string;
 }
 
+type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string }
+  | { type: string };
+
 interface AnthropicMessagesResponse {
-  content: Array<{ type: string; text: string }>;
+  content: AnthropicContentBlock[];
   usage?: { input_tokens: number; output_tokens: number };
 }
 
@@ -27,6 +32,12 @@ export class AnthropicProvider implements Provider {
     }
 
     const thinkingBudget = options?.extendedThinking;
+    if (thinkingBudget !== undefined && thinkingBudget < 1024) {
+      throw new ProviderError(
+        `extendedThinking budget must be at least 1024 tokens (got ${thinkingBudget})`,
+        'anthropic',
+      );
+    }
     const useThinking = thinkingBudget !== undefined && thinkingBudget > 0;
 
     const body: Record<string, unknown> = {
@@ -36,7 +47,7 @@ export class AnthropicProvider implements Provider {
       // Extended thinking requires temperature=1; otherwise use 0.1 for precise analysis.
       temperature: useThinking ? 1 : (options?.temperature ?? 0.1),
     };
-    if (options?.system) body['system'] = options.system;
+    if (options?.system) body.system = options.system;
     if (useThinking) {
       body['thinking'] = { type: 'enabled', budget_tokens: thinkingBudget };
     }
@@ -79,8 +90,8 @@ export class AnthropicProvider implements Provider {
     }
 
     // Extended thinking prepends thinking blocks before text blocks; find the first text block.
-    const block = data.content?.find((b) => b.type === 'text');
-    if (!block || typeof block.text !== 'string') {
+    const block = data.content?.find((b): b is { type: 'text'; text: string } => b.type === 'text');
+    if (!block) {
       throw new ProviderError(
         'Anthropic response contains no text content block',
         'anthropic',

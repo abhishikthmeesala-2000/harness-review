@@ -4,9 +4,9 @@ export interface CompletionOptions {
   /** System prompt sent in the API's dedicated system role (not as user content). */
   system?: string;
   /**
-   * Enable extended thinking for Anthropic models. Value is the thinking
-   * budget in tokens (minimum 1024). When set, temperature is forced to 1
-   * as required by the API.
+   * Enable extended thinking for Anthropic models. Value is the thinking budget
+   * in tokens (minimum 1024). When set, temperature is forced to 1 as required
+   * by the API. Silently ignored by non-Anthropic providers.
    */
   extendedThinking?: number;
 }
