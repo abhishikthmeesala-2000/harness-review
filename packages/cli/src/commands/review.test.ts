@@ -183,15 +183,25 @@ describe('reviewCommand', () => {
   });
 
   it('posts inline comment per finding when postComments is true', async () => {
-    // Resolve PR head SHA (GET /pulls/{n}) returns json; all other calls just succeed.
+    // Route fetch calls to appropriate stubs:
+    //   GET /pulls/{n}              → head SHA resolve
+    //   GET /issues/{n}/comments*  → empty comment list (no prior summary)
+    //   everything else            → generic 201 success
     const fetchMock = vi.fn().mockImplementation((url: string, init?: { method?: string }) => {
-      const isHeadShaResolve =
-        url.includes('/pulls/') && !url.endsWith('/comments') && (init?.method ?? 'GET') === 'GET';
-      return Promise.resolve({
-        ok: true,
-        status: isHeadShaResolve ? 200 : 201,
-        json: async () => (isHeadShaResolve ? { head: { sha: 'deadbeefcafe' } } : {}),
-      });
+      const method = init?.method ?? 'GET';
+      if (method === 'GET' && url.includes('/pulls/') && !url.endsWith('/comments')) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: async () => ({ head: { sha: 'deadbeefcafe' } }),
+        });
+      }
+      if (method === 'GET' && url.includes('/issues/') && url.includes('/comments')) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: async () => [],
+        });
+      }
+      return Promise.resolve({ ok: true, status: 201, json: async () => ({}) });
     });
     vi.stubGlobal('fetch', fetchMock);
 
@@ -223,9 +233,11 @@ describe('reviewCommand', () => {
         (url as string).endsWith('/comments') &&
         (init?.method ?? 'GET') === 'POST',
     );
-    const issueCalls = fetchMock.mock.calls.filter(
+    const issuePostCalls = fetchMock.mock.calls.filter(
       ([url, init]: [string, RequestInit | undefined]) =>
-        (url as string).includes('/issues/') && (init?.method ?? 'GET') === 'POST',
+        (url as string).includes('/issues/') &&
+        (url as string).includes('/comments') &&
+        (init?.method ?? 'GET') === 'POST',
     );
 
     // Each inline call must carry the required GitHub PR review comment fields
@@ -240,9 +252,9 @@ describe('reviewCommand', () => {
       });
     }
 
-    // Summary issued as an issue comment (or no findings → no calls at all)
-    if (issueCalls.length > 0) {
-      const summaryBody = JSON.parse((issueCalls[0][1] as RequestInit).body as string);
+    // Summary is POSTed as an issue comment when findings exist; body must be non-empty
+    if (issuePostCalls.length > 0) {
+      const summaryBody = JSON.parse((issuePostCalls[0][1] as RequestInit).body as string);
       expect(summaryBody.body).toBeTruthy();
     }
 
