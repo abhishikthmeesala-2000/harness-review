@@ -15,9 +15,18 @@ export class TestingAgent extends BaseAgent {
   readonly description =
     'Looks for missing tests, weak assertions, untested edge cases, untested negative paths.';
 
+  override systemPrompt(): string {
+    return [
+      'You are a senior quality assurance engineer and test architect with deep expertise in building reliable test suites for complex TypeScript systems.',
+      'You think about what would break silently in production if the code were wrong — not just which lines lack coverage, but which behavior changes would go entirely undetected.',
+      'You know the difference between meaningful assertions and superficial line coverage, and you understand what unit tests, integration tests, and E2E tests each actually verify.',
+      'Before claiming a test gap, you check whether coverage exists in any form — including integration tests, test entries in the context, or calls from already-tested public surfaces.',
+      'You only flag missing tests when the absence would genuinely allow a production bug to reach users undetected.',
+    ].join(' ');
+  }
+
   promptTemplate(context: ContextBundle): string {
     return [
-      'You are the Testing agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       '',
       'ROLE',

@@ -3,7 +3,7 @@ import {
   type CandidateFinding,
   type ContextBundle,
 } from '@engagement-harness/core';
-import type { Provider } from '@engagement-harness/providers';
+import type { CompletionOptions, Provider } from '@engagement-harness/providers';
 import chalk from 'chalk';
 
 export abstract class BaseAgent {
@@ -21,6 +21,23 @@ export abstract class BaseAgent {
   abstract promptTemplate(context: ContextBundle): string;
 
   /**
+   * Expert persona sent as the provider's system message. Overriding this
+   * with a specialist description is the single most effective way to improve
+   * finding quality — the system role has privileged weight over user content.
+   */
+  systemPrompt(): string | undefined {
+    return undefined;
+  }
+
+  /**
+   * Per-agent completion options (e.g. extendedThinking for high-stakes agents).
+   * Merged with provider defaults; agent values take precedence.
+   */
+  completionOptions(): CompletionOptions {
+    return {};
+  }
+
+  /**
    * Run the agent. Default implementation:
    *   1. Build the prompt; bail to [] if empty.
    *   2. Call provider.complete(); on throw, warn and return [].
@@ -33,9 +50,13 @@ export abstract class BaseAgent {
     const prompt = this.promptTemplate(context);
     if (!prompt) return [];
 
+    const opts: CompletionOptions = { ...this.completionOptions() };
+    const sys = this.systemPrompt();
+    if (sys) opts.system = sys;
+
     let raw: string;
     try {
-      const result = await provider.complete(prompt);
+      const result = await provider.complete(prompt, opts);
       raw = result.content;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

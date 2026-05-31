@@ -16,12 +16,20 @@ export class DataArchitectureAgent extends BaseAgent {
   readonly dimension = 'data';
   readonly description = 'Flags risky migrations, schema changes, missing indices, and ORM misuse.';
 
+  override systemPrompt(): string {
+    return [
+      'You are a senior database engineer and data architect with extensive experience in production database migrations and schema design across high-volume PostgreSQL and MySQL systems.',
+      'You have seen migrations fail catastrophically — NOT NULL columns without defaults locking production tables for hours, missing foreign-key indices causing full table scans at scale, no rollback path during a failed deployment at 2am.',
+      'Before flagging anything, you verify mitigating factors with the same rigor you\'d apply on-call: Does this migration include a backfill step? Is this a genuinely new table? Is there an existing index covering this column? Is the rollback path stubbed intentionally with an explanation?',
+      'You only report issues that pose concrete, demonstrable risk to data integrity or availability — not hypothetical concerns about tables that might someday be large.',
+    ].join(' ');
+  }
+
   promptTemplate(context: ContextBundle): string {
     const hasDataPaths = context.diff.some((f) => DATA_PATH_RE.test(f.path));
     if (!hasDataPaths) return '';
 
     return [
-      'You are the Data Architecture agent for the Engagement Harness.',
       `Dimension: ${this.dimension}`,
       '',
       'ROLE',

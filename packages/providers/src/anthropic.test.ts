@@ -99,7 +99,7 @@ describe('AnthropicProvider', () => {
   it('throws ProviderError when content array is empty', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(makeResponse({ content: [] }));
     const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
-    await expect(provider.complete('hello')).rejects.toThrow('content[0].text');
+    await expect(provider.complete('hello')).rejects.toThrow('no text content block');
   });
 
   it('omits tokensUsed when usage is absent', async () => {
