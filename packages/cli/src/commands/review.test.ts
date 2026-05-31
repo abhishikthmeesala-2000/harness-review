@@ -223,8 +223,9 @@ describe('reviewCommand', () => {
         (url as string).endsWith('/comments') &&
         (init?.method ?? 'GET') === 'POST',
     );
-    const issueCalls = fetchMock.mock.calls.filter(([url]: [string]) =>
-      (url as string).includes('/issues/'),
+    const issueCalls = fetchMock.mock.calls.filter(
+      ([url, init]: [string, RequestInit | undefined]) =>
+        (url as string).includes('/issues/') && (init?.method ?? 'GET') === 'POST',
     );
 
     // Each inline call must carry the required GitHub PR review comment fields

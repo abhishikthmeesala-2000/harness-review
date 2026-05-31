@@ -153,3 +153,82 @@ describe('GitHubCommenter.postFindingComment (inline)', () => {
     expect(body).toContain('🔗 Cross-file issue');
   });
 });
+
+const emptyDelta = { newFindings: [], outstandingFindings: [], resolvedFindings: [] };
+
+describe('GitHubCommenter.postReviewSummary (upsert)', () => {
+  it('POSTs a new comment when no existing summary is found', async () => {
+    const calls = installFetch((url, method) => {
+      if (method === 'GET' && url.includes('/issues/7/comments'))
+        return { ok: true, status: 200, json: [] };
+      if (method === 'POST' && url.endsWith('/issues/7/comments')) return { ok: true, status: 201 };
+      return { ok: false, status: 404 };
+    });
+
+    await new GitHubCommenter(opts).postReviewSummary(7, emptyDelta);
+
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/issues/7/comments'))).toBe(true);
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+  });
+
+  it('PATCHes the existing comment when the marker is found', async () => {
+    const calls = installFetch((url, method) => {
+      if (method === 'GET' && url.includes('/issues/7/comments'))
+        return {
+          ok: true,
+          status: 200,
+          json: [{ id: 999, body: '<!-- eh-summary -->\nold content' }],
+        };
+      if (method === 'PATCH' && url.endsWith('/issues/comments/999'))
+        return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    });
+
+    await new GitHubCommenter(opts).postReviewSummary(7, emptyDelta);
+
+    const patch = calls.find((c) => c.method === 'PATCH');
+    expect(patch?.url).toMatch(/\/issues\/comments\/999$/);
+    expect(calls.some((c) => c.method === 'POST')).toBe(false);
+  });
+
+  it('PATCHed body still contains SUMMARY_MARKER', async () => {
+    const calls = installFetch((url, method) => {
+      if (method === 'GET' && url.includes('/issues/7/comments'))
+        return {
+          ok: true,
+          status: 200,
+          json: [{ id: 999, body: '<!-- eh-summary -->\nold content' }],
+        };
+      if (method === 'PATCH' && url.endsWith('/issues/comments/999'))
+        return { ok: true, status: 200 };
+      return { ok: false, status: 404 };
+    });
+
+    await new GitHubCommenter(opts).postReviewSummary(7, emptyDelta);
+
+    const patchBody = calls.find((c) => c.method === 'PATCH')?.body?.['body'] as string;
+    expect(patchBody).toContain('<!-- eh-summary -->');
+  });
+
+  it('falls back to POST when the GET for existing comments fails', async () => {
+    const calls = installFetch((url, method) => {
+      if (method === 'GET' && url.includes('/issues/7/comments'))
+        return { ok: false, status: 500 };
+      if (method === 'POST' && url.endsWith('/issues/7/comments')) return { ok: true, status: 201 };
+      return { ok: false, status: 404 };
+    });
+
+    await new GitHubCommenter(opts).postReviewSummary(7, emptyDelta);
+
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/issues/7/comments'))).toBe(true);
+    expect(calls.some((c) => c.method === 'PATCH')).toBe(false);
+  });
+});
+
+describe('GitHubCommenter.formatReviewSummary', () => {
+  it('always embeds SUMMARY_MARKER as the first line', () => {
+    const commenter = new GitHubCommenter(opts);
+    const body = commenter.formatReviewSummary(emptyDelta);
+    expect(body.startsWith('<!-- eh-summary -->')).toBe(true);
+  });
+});

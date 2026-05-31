@@ -1,5 +1,7 @@
 import type { Finding } from '@engagement-harness/core';
 
+const SUMMARY_MARKER = '<!-- eh-summary -->';
+
 export interface GitHubCommenterOptions {
   token: string;
   owner: string;
@@ -195,13 +197,55 @@ export class GitHubCommenter {
     ].join('\n');
   }
 
-  /** Post one summary comment reflecting the current re-review state of the PR. */
+  /** Post or update the single summary comment for this PR (upsert by marker). */
   async postReviewSummary(prNumber: number, delta: ReviewDelta): Promise<void> {
-    await this.postComment(prNumber, this.formatReviewSummary(delta));
+    const body = this.formatReviewSummary(delta);
+    const existingId = await this.findSummaryCommentId(prNumber);
+    if (existingId !== null) {
+      await this.editComment(existingId, body);
+    } else {
+      await this.postComment(prNumber, body);
+    }
+  }
+
+  /** Scan PR issue comments for one containing SUMMARY_MARKER; return its ID or null. */
+  private async findSummaryCommentId(prNumber: number): Promise<number | null> {
+    try {
+      const res = await fetch(`${this.base}/issues/${prNumber}/comments?per_page=100`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+      if (!res.ok) return null;
+      const comments = (await res.json()) as Array<{ id: number; body: string }>;
+      const match = comments.find((c) => c.body.includes(SUMMARY_MARKER));
+      return match?.id ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** PATCH an existing comment body in place. Throws on non-2xx. */
+  private async editComment(commentId: number, body: string): Promise<void> {
+    const res = await fetch(`${this.base}/issues/comments/${commentId}`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${this.token}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ body }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to edit comment ${commentId}: ${res.status}`);
+    }
   }
 
   formatReviewSummary(delta: ReviewDelta): string {
-    const lines: string[] = ['## 🔍 Engagement Harness Re-Review', ''];
+    const lines: string[] = [SUMMARY_MARKER, '## 🔍 Engagement Harness Re-Review', ''];
 
     if (delta.resolvedFindings.length > 0) {
       lines.push(`### ✅ Resolved (${delta.resolvedFindings.length})`, '');
