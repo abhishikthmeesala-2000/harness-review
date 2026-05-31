@@ -1,4 +1,5 @@
 import type { ContextBundle } from '@engagement-harness/core';
+import type { CompletionOptions } from '@engagement-harness/providers';
 
 import { BaseAgent } from './base.js';
 import {
@@ -25,7 +26,7 @@ export class ReviewerAgent extends BaseAgent {
     ].join(' ');
   }
 
-  override completionOptions() {
+  override completionOptions(): CompletionOptions {
     // Extended thinking gives the reviewer a scratchpad to trace logic paths
     // before committing to a finding — dramatically reduces false positives.
     return { extendedThinking: 8000 };

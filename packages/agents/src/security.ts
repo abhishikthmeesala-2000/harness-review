@@ -1,4 +1,5 @@
 import type { ContextBundle } from '@engagement-harness/core';
+import type { CompletionOptions } from '@engagement-harness/providers';
 
 import { BaseAgent } from './base.js';
 import {
@@ -25,7 +26,7 @@ export class SecurityAgent extends BaseAgent {
     ].join(' ');
   }
 
-  override completionOptions() {
+  override completionOptions(): CompletionOptions {
     // Security analysis benefits most from extended thinking — attack path
     // tracing requires following data flow across multiple hops.
     return { extendedThinking: 10000 };

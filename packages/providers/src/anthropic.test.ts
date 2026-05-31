@@ -110,4 +110,85 @@ describe('AnthropicProvider', () => {
     const result = await provider.complete('hello');
     expect(result.tokensUsed).toBeUndefined();
   });
+
+  it('sends system prompt in request body when provided', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({ content: [{ type: 'text', text: 'ok' }] }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    await provider.complete('hello', { system: 'You are a security expert.' });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['system']).toBe('You are a security expert.');
+  });
+
+  it('omits system field when not provided', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({ content: [{ type: 'text', text: 'ok' }] }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    await provider.complete('hello');
+
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['system']).toBeUndefined();
+  });
+
+  it('sends thinking block and forces temperature=1 when extendedThinking is set', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({
+        content: [
+          { type: 'thinking', thinking: 'let me reason...' },
+          { type: 'text', text: 'result' },
+        ],
+      }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    const result = await provider.complete('hello', { extendedThinking: 2000 });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['thinking']).toEqual({ type: 'enabled', budget_tokens: 2000 });
+    expect(body['temperature']).toBe(1);
+    expect(result.content).toBe('result');
+  });
+
+  it('extracts text block when thinking block appears first', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({
+        content: [
+          { type: 'thinking', thinking: 'reasoning...' },
+          { type: 'text', text: 'the answer' },
+        ],
+      }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    const result = await provider.complete('hello', { extendedThinking: 1024 });
+    expect(result.content).toBe('the answer');
+  });
+
+  it('throws ProviderError when response contains only thinking blocks', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({
+        content: [{ type: 'thinking', thinking: 'only thinking, no text' }],
+      }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    await expect(provider.complete('hello', { extendedThinking: 1024 })).rejects.toThrow(
+      'no text content block',
+    );
+  });
+
+  it('throws ProviderError when extendedThinking budget is below 1024', async () => {
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    await expect(provider.complete('hello', { extendedThinking: 500 })).rejects.toThrow(
+      'extendedThinking budget must be at least 1024 tokens',
+    );
+  });
 });
