@@ -1,4 +1,5 @@
 .claude/
+.claire/
 node_modules/
 dist/
 *.log
