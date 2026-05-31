@@ -245,27 +245,16 @@ export class GitHubCommenter {
   }
 
   formatReviewSummary(delta: ReviewDelta): string {
-    const lines: string[] = [SUMMARY_MARKER, '## 🔍 Engagement Harness Re-Review', ''];
+    const lines: string[] = [SUMMARY_MARKER, '## 🔍 Engagement Harness · Review Status', ''];
 
-    if (delta.resolvedFindings.length > 0) {
-      lines.push(`### ✅ Resolved (${delta.resolvedFindings.length})`, '');
-      for (const { finding } of delta.resolvedFindings) {
-        lines.push(`- ~~${finding.title}~~ ✅`);
-      }
-      lines.push('');
-    }
+    const hasAnything =
+      delta.newFindings.length > 0 ||
+      delta.outstandingFindings.length > 0 ||
+      delta.resolvedFindings.length > 0;
 
-    if (delta.outstandingFindings.length > 0) {
-      lines.push(
-        `### ⚠️ Still Outstanding (${delta.outstandingFindings.length}) — please fix before merging`,
-        '',
-      );
-      for (const f of delta.outstandingFindings) {
-        lines.push(
-          `- ${severityEmoji(f.severity)} [${f.severity.toUpperCase()}] ${f.title} — \`${f.file}:${f.lineStart}\``,
-        );
-      }
-      lines.push('');
+    if (!hasAnything) {
+      lines.push('✅ No issues found. This PR is ready to merge.');
+      return lines.join('\n').trimEnd();
     }
 
     if (delta.newFindings.length > 0) {
@@ -278,13 +267,25 @@ export class GitHubCommenter {
       lines.push('');
     }
 
-    if (delta.outstandingFindings.length === 0 && delta.newFindings.length === 0) {
+    if (delta.outstandingFindings.length > 0) {
       lines.push(
-        '### 🎉 All Issues Resolved!',
-        '',
-        'No outstanding or new issues found. Ready to merge.',
+        `### ⚠️ Outstanding (${delta.outstandingFindings.length}) — please fix before merging`,
         '',
       );
+      for (const f of delta.outstandingFindings) {
+        lines.push(
+          `- ${severityEmoji(f.severity)} [${f.severity.toUpperCase()}] ${f.title} — \`${f.file}:${f.lineStart}\``,
+        );
+      }
+      lines.push('');
+    }
+
+    if (delta.resolvedFindings.length > 0) {
+      lines.push(`### ✅ Resolved This Run (${delta.resolvedFindings.length})`, '');
+      for (const { finding } of delta.resolvedFindings) {
+        lines.push(`- ~~${finding.title}~~`);
+      }
+      lines.push('');
     }
 
     return lines.join('\n').trimEnd();
