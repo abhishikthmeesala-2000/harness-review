@@ -14,7 +14,7 @@ const MAX_LINES_PER_CONTEXT_FILE = 150;
 export const FINDING_SCHEMA_BLOCK = `Return ONLY a JSON array. Each element must match this exact shape (no extra fields):
 [
   {
-    "id": "EH-<AGENT>-<N>",
+    "id": "EH-<zero-padded 4-digit number, e.g. EH-0001, EH-0002>",
     "title": "Short description (max 120 chars)",
     "category": "<one of: correctness | security | testing | domain-policy | design | data | observability | intent-gap>",
     "dimension": "<same as the Dimension line above>",

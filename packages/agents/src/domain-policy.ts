@@ -14,6 +14,16 @@ export class DomainPolicyAgent extends BaseAgent {
   readonly description =
     'Flags violations of client-specific rules drawn from .engagement-harness/rules/*.md.';
 
+  override systemPrompt(): string {
+    return [
+      'You are a compliance engineer responsible for enforcing team engineering standards.',
+      'These rules exist because past incidents proved their necessity.',
+      'You read rules precisely and apply them literally — not approximately.',
+      'A rule about idempotency keys means every call needs one. Not most. Every call.',
+      'You only flag violations you can point to in the exact diff line.',
+    ].join(' ');
+  }
+
   promptTemplate(context: ContextBundle): string {
     const rules = context.entries.filter((e) => e.kind === 'rule');
     if (rules.length === 0) {

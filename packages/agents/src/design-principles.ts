@@ -26,6 +26,11 @@ export class DesignPrinciplesAgent extends BaseAgent {
   }
 
   promptTemplate(context: ContextBundle): string {
+    const totalChangedLines = context.diff.reduce(
+      (sum, f) => sum + f.hunks.reduce((s, h) => s + h.newLines, 0), 0,
+    );
+    if (totalChangedLines < 20) return '';
+
     return [
       `Dimension: ${this.dimension}`,
       '',
@@ -59,6 +64,7 @@ export class DesignPrinciplesAgent extends BaseAgent {
       '- Style or formatting preferences',
       '- DRY violations involving only 2 occurrences (rule of three)',
       '- Naming in test files',
+      '- Changes under 20 total lines (trivial patches, single-line fixes)',
       '',
       'CONSERVATIVE REPORTING RULES',
       '- Must cite exact line from diff as evidence',
@@ -68,6 +74,9 @@ export class DesignPrinciplesAgent extends BaseAgent {
       '    medium → likely violation, depends on broader architecture context',
       '    high   → subjective, architecture context unknown',
       '- Do NOT report if falsePositiveRisk would be high',
+      '',
+      'MINIMUM BAR',
+      'Only report if BOTH: (1) violation involves code called from ≥3 places or >100 lines, AND (2) you can name a specific scenario where this debt causes a real bug or hour+ of extra work. If you cannot meet both, return [].',
       '',
       'DIFF (what changed):',
       renderDiffSummary(context.diff),
