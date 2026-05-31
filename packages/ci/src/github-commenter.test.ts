@@ -232,3 +232,68 @@ describe('GitHubCommenter.formatReviewSummary', () => {
     expect(body.startsWith('<!-- eh-summary -->')).toBe(true);
   });
 });
+
+describe('GitHubCommenter.formatReviewSummary (rendering)', () => {
+  const commenter = new GitHubCommenter(opts);
+
+  it('all-clear: shows clean message when all lists are empty', () => {
+    const body = commenter.formatReviewSummary(emptyDelta);
+    expect(body).toContain('No issues found');
+    expect(body).toContain('ready to merge');
+    expect(body).not.toContain('New Issues');
+    expect(body).not.toContain('Outstanding');
+    expect(body).not.toContain('Resolved This Run');
+  });
+
+  it('new-only: shows new findings section only', () => {
+    const delta = { newFindings: [makeFinding()], outstandingFindings: [], resolvedFindings: [] };
+    const body = commenter.formatReviewSummary(delta);
+    expect(body).toContain('New Issues');
+    expect(body).toContain('SQL injection in deleteUser');
+    expect(body).not.toContain('Outstanding');
+    expect(body).not.toContain('Resolved This Run');
+    expect(body).not.toContain('No issues found');
+  });
+
+  it('outstanding-only: shows outstanding section only', () => {
+    const delta = { newFindings: [], outstandingFindings: [makeFinding()], resolvedFindings: [] };
+    const body = commenter.formatReviewSummary(delta);
+    expect(body).toContain('Outstanding');
+    expect(body).toContain('SQL injection in deleteUser');
+    expect(body).not.toContain('New Issues');
+    expect(body).not.toContain('Resolved This Run');
+    expect(body).not.toContain('No issues found');
+  });
+
+  it('resolved-only: shows resolved section only', () => {
+    const delta = {
+      newFindings: [],
+      outstandingFindings: [],
+      resolvedFindings: [{ finding: makeFinding() }],
+    };
+    const body = commenter.formatReviewSummary(delta);
+    expect(body).toContain('Resolved This Run');
+    expect(body).toContain('SQL injection in deleteUser');
+    expect(body).not.toContain('New Issues');
+    expect(body).not.toContain('Outstanding');
+    expect(body).not.toContain('No issues found');
+  });
+
+  it('mixed: renders new → outstanding → resolved in that order', () => {
+    const delta = {
+      newFindings: [makeFinding({ id: 'EH-1', title: 'New bug' })],
+      outstandingFindings: [makeFinding({ id: 'EH-2', title: 'Old bug' })],
+      resolvedFindings: [{ finding: makeFinding({ id: 'EH-3', title: 'Fixed bug' }) }],
+    };
+    const body = commenter.formatReviewSummary(delta);
+    expect(body).toContain('New Issues');
+    expect(body).toContain('New bug');
+    expect(body).toContain('Outstanding');
+    expect(body).toContain('Old bug');
+    expect(body).toContain('Resolved This Run');
+    expect(body).toContain('Fixed bug');
+    expect(body.indexOf('New Issues')).toBeLessThan(body.indexOf('Outstanding'));
+    expect(body.indexOf('Outstanding')).toBeLessThan(body.indexOf('Resolved This Run'));
+    expect(body).not.toContain('No issues found');
+  });
+});
