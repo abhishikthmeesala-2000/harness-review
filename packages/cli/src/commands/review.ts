@@ -209,11 +209,24 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
       const ghRepo = process.env['GITHUB_REPOSITORY'] ?? '';
       const [ghOwner, ghRepoName] = ghRepo.split('/');
       if (ghOwner && ghRepoName) {
+        // Build a map of file → set of right-side (new-file) line numbers visible
+        // in the diff so the commenter can target only lines GitHub will accept.
+        const diffRightLines = new Map<string, Set<number>>();
+        for (const file of diffs) {
+          const lines = new Set<number>();
+          for (const hunk of file.hunks) {
+            for (const line of hunk.lines) {
+              if (line.type !== 'removed') lines.add(line.lineNumber);
+            }
+          }
+          if (lines.size > 0) diffRightLines.set(file.path, lines);
+        }
         const commenter = new GitHubCommenter({
           token: process.env['GITHUB_TOKEN'],
           owner: ghOwner,
           repo: ghRepoName,
           runId,
+          diffRightLines,
         });
         for (const finding of delta.newFindings) {
           await commenter.postFindingComment(finding, prNumber);

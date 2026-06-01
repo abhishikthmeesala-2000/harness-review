@@ -7,6 +7,8 @@ export interface GitHubCommenterOptions {
   owner: string;
   repo: string;
   runId: string;
+  /** Map of file path → set of right-side (new-file) line numbers visible in the PR diff. */
+  diffRightLines?: Map<string, Set<number>>;
 }
 
 /**
@@ -36,6 +38,7 @@ export class GitHubCommenter {
   private readonly repo: string;
   private readonly runId: string;
   private readonly base: string;
+  private readonly diffRightLines: Map<string, Set<number>>;
   /** Cached PR head SHA, resolved lazily and reused across findings in one run. */
   private headSha: string | null = null;
 
@@ -45,6 +48,29 @@ export class GitHubCommenter {
     this.repo = options.repo;
     this.runId = options.runId;
     this.base = `https://api.github.com/repos/${options.owner}/${options.repo}`;
+    this.diffRightLines = options.diffRightLines ?? new Map();
+  }
+
+  /** Normalize a file path for comparison against diff paths (strip leading ./ or /). */
+  private static normalizePath(p: string): string {
+    return p.replace(/^\.\//, '').replace(/^\//, '');
+  }
+
+  /**
+   * Return the highest line number of finding that is still visible on the
+   * RIGHT side of the diff. Returns null when the file is not in the diff at
+   * all, or when neither lineStart nor lineEnd falls within any diff hunk.
+   */
+  private resolveInlineLine(finding: Finding): number | null {
+    const normFile = GitHubCommenter.normalizePath(finding.file);
+    const visibleLines = this.diffRightLines.get(normFile);
+    if (!visibleLines || visibleLines.size === 0) return null;
+
+    // Prefer lineEnd — try walking backwards to the nearest visible line.
+    for (let l = finding.lineEnd; l >= finding.lineStart; l--) {
+      if (visibleLines.has(l)) return l;
+    }
+    return null;
   }
 
   async postFindings(findings: Finding[], prNumber: number): Promise<void> {
@@ -95,13 +121,17 @@ export class GitHubCommenter {
    */
   async postFindingComment(finding: Finding, prNumber: number): Promise<void> {
     const body = this.formatFindingComment(finding);
-    try {
-      const commitId = await this.resolveCommitId(prNumber);
-      await this.postReviewComment(prNumber, finding, commitId, body);
-    } catch {
-      // Inline placement failed — fall back to a conversation comment.
-      await this.postComment(prNumber, body);
+    const inlineLine = this.resolveInlineLine(finding);
+    if (inlineLine !== null) {
+      try {
+        const commitId = await this.resolveCommitId(prNumber);
+        await this.postReviewComment(prNumber, finding, commitId, body, inlineLine);
+        return;
+      } catch {
+        // Inline placement failed — fall back to a conversation comment.
+      }
     }
+    await this.postComment(prNumber, body);
   }
 
   /** Resolve (and cache) the PR head commit SHA that inline comments attach to. */
@@ -132,18 +162,24 @@ export class GitHubCommenter {
     finding: Finding,
     commitId: string,
     body: string,
+    resolvedLine: number,
   ): Promise<void> {
+    const filePath = GitHubCommenter.normalizePath(finding.file);
     const payload: Record<string, unknown> = {
       body,
       commit_id: commitId,
-      path: finding.file,
-      line: finding.lineEnd,
+      path: filePath,
+      line: resolvedLine,
       side: 'RIGHT',
     };
-    // Multi-line span: anchor the comment from lineStart to lineEnd.
-    if (finding.lineEnd > finding.lineStart) {
-      payload['start_line'] = finding.lineStart;
-      payload['start_side'] = 'RIGHT';
+    // Multi-line span: only set start_line when it also falls within the diff
+    // (resolvedLine may have been walked back — start_line could be outside).
+    if (finding.lineStart < resolvedLine) {
+      const visibleLines = this.diffRightLines.get(filePath);
+      if (visibleLines?.has(finding.lineStart)) {
+        payload['start_line'] = finding.lineStart;
+        payload['start_side'] = 'RIGHT';
+      }
     }
     const res = await fetch(`${this.base}/pulls/${prNumber}/comments`, {
       method: 'POST',
