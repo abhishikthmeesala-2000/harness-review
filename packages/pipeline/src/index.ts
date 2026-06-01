@@ -7,4 +7,8 @@ export type { DeltaResult, TrackedFinding } from './finding-tracker.js';
 export { PolicyEngine } from './policy-engine.js';
 export type { EvidenceLevel, PipelineMetrics, PipelineResult, RejectedEntry } from './types.js';
 export { QualityGate } from './quality-gate.js';
+export { TruthVerifierAgent } from './truth-verifier-agent.js';
+export type { TruthVerdict, TruthVerdictDecision, TruthVerdictFailureType } from './truth-verifier-agent.js';
+export { TruthVerifierStage } from './truth-verifier-stage.js';
+export type { TruthVerifierResult } from './truth-verifier-stage.js';
 export { Verifier } from './verifier.js';

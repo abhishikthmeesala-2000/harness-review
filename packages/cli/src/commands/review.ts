@@ -154,7 +154,8 @@ export async function reviewCommand(options: ReviewOptions): Promise<void> {
 
   const candidates = [...pass1Findings, ...pass2Findings];
 
-  const result = await FindingPipeline.process(candidates, bundle, config);
+  const truthVerifierProvider = ModelRouter.route('reviewer', config);
+  const result = await FindingPipeline.process(candidates, bundle, config, truthVerifierProvider);
 
   // Enrich published findings with run/PR metadata for comment traceability.
   const prNumber = detectPrNumber();

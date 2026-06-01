@@ -147,6 +147,12 @@ importers:
       '@engagement-harness/core':
         specifier: workspace:*
         version: link:../core
+      '@engagement-harness/providers':
+        specifier: workspace:*
+        version: link:../providers
+      zod:
+        specifier: ^4.4.1
+        version: 4.4.1
 
   packages/providers:
     dependencies:

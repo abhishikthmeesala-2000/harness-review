@@ -57,6 +57,8 @@ const baseFindingShape = {
   remediationReadiness: RemediationReadinessSchema,
   // Which review pass produced this finding: 'local' (per-file) or 'integration' (cross-file).
   pass: z.enum(['local', 'integration']).optional(),
+  // For cross-file findings: all files involved in the issue (must have >= 2 entries).
+  filesInvolved: z.array(z.string()).optional(),
   // Stable cross-run identity assigned by the FindingTracker.
   fingerprint: z.string().optional(),
   metadata: z
