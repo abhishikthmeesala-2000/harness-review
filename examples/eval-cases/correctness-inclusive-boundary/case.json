@@ -1,0 +1,12 @@
+{
+  "name": "correctness-inclusive-boundary",
+  "description": "Inclusive range utility is intentional, not an off-by-one bug.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add inclusive range utility",
+  "prBody": "The upper bound is intentionally inclusive by contract.",
+  "expectedFindings": [],
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}

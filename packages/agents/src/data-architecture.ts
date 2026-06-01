@@ -2,6 +2,7 @@ import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -35,6 +36,8 @@ export class DataArchitectureAgent extends BaseAgent {
       'ROLE',
       'Identify REAL data integrity and schema safety issues. Be CONSERVATIVE — only report issues that pose concrete risk of data loss, downtime, or corruption.',
       '',
+      CONSERVATIVE_FINDING_BLOCK,
+      '',
       'WHAT TO CHECK',
       '',
       '1. Non-nullable column added without a DEFAULT',
@@ -51,7 +54,7 @@ export class DataArchitectureAgent extends BaseAgent {
       '3. FK column without index',
       '   Pattern: foreign key column added with no corresponding `CREATE INDEX`.',
       '   Risk: full table scans on joins.',
-      '   Mitigating factors: table is small (<1000 rows per team docs), index created in a separate migration.',
+      '   Mitigating factors: table is small (<1000 rows per team docs), index created in a separate migration, or the index already exists elsewhere in the supplied context.',
       '',
       '4. Unsafe ORM raw query with user input',
       '   Pattern: `sequelize.query(...)`, `knex.raw(...)`, or similar with string interpolation of user-controlled data.',
@@ -61,7 +64,7 @@ export class DataArchitectureAgent extends BaseAgent {
       '',
       '5. Destructive schema change',
       '   Pattern: `DROP COLUMN`, `DROP TABLE`, `TRUNCATE`, or column type narrowing.',
-      '   Mitigating factors: data confirmed already migrated, column confirmed unused.',
+      '   Mitigating factors: data confirmed already migrated, column confirmed unused, or the target is a transient/test table.',
       '',
       'FALSE POSITIVE PATTERNS — DO NOT REPORT',
       '- Test or seed migrations (file path contains `seed`, `fixture`, `test`)',

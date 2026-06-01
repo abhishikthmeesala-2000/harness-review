@@ -1,0 +1,12 @@
+{
+  "name": "testing-indirect-coverage",
+  "description": "New utility is covered by an integration-style test in the same diff.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add inclusive range utility with coverage",
+  "prBody": "The new utility is exercised directly by a new test in the same change.",
+  "expectedFindings": [],
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}

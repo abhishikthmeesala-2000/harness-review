@@ -3,6 +3,7 @@ import type { CompletionOptions } from '@engagement-harness/providers';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -39,11 +40,14 @@ export class ReviewerAgent extends BaseAgent {
       'ROLE',
       'Identify REAL logic bugs and correctness issues with high confidence. Be CONSERVATIVE — only report issues you can demonstrate with specific evidence from the code.',
       '',
+      CONSERVATIVE_FINDING_BLOCK,
+      '',
       'WHAT TO CHECK',
       '',
       '1. Logic bugs — off-by-one, wrong operator, inverted condition',
       '   Pattern: boundary check uses `<` instead of `<=`, array index goes out of bounds, condition is negated when it should not be.',
       '   Mitigating factors: look at full context — the apparent bug may be intentional (e.g., exclusive upper bound is correct for slicing).',
+      '   Also do not flag intentionally inclusive loops/ranges when the end value is part of the contract.',
       '   Vulnerable: `for (let i = 0; i <= arr.length; i++)` — accesses arr[arr.length] which is undefined',
       '   Safe (do NOT flag): `for (let i = 0; i < arr.length; i++)`',
       '',

@@ -176,6 +176,67 @@ describe('MockProvider (diff-context patching)', () => {
     expect(diffEvidence?.['content']).toContain('[REDACTED_SECRET]');
     expect(findings[0]?.file).toBe('config.js');
   });
+
+  it('suppresses the security fixture for framework-managed auth / escaping patterns', async () => {
+    const safePrompt = [
+      'You are the Security agent.',
+      'Dimension: security',
+      'Changed files:',
+      '--- src/components/profile.tsx (modified)',
+      '@@ -1,3 +1,4 @@',
+      '+// JSX auto-escapes user input',
+      '+return <div>{name}</div>;',
+      '+router.use(requireAdmin());',
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(safePrompt);
+    expect(content).toBe('[]');
+  });
+
+  it('suppresses the correctness fixture for intentionally inclusive boundaries', async () => {
+    const safePrompt = [
+      'You are the Reviewer agent.',
+      'Dimension: correctness',
+      'Changed files:',
+      '--- src/utils/range.ts (modified)',
+      '@@ -1,3 +1,7 @@',
+      '+// inclusive by design: end is part of the contract',
+      '+export function inclusiveRange(start: number, end: number): number[] {',
+      '+  const result: number[] = [];',
+      '+  for (let i = start; i <= end; i++) {',
+      '+    result.push(i);',
+      '+  }',
+      '+}',
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(safePrompt);
+    expect(content).toBe('[]');
+  });
+
+  it('suppresses the testing fixture when the diff includes direct test coverage', async () => {
+    const safePrompt = [
+      'You are the Testing agent.',
+      'Dimension: testing',
+      'Changed files:',
+      '--- src/utils/range.ts (modified)',
+      '@@ -1,1 +1,5 @@',
+      '+export function inclusiveRange(start: number, end: number): number[] {',
+      '+  const result: number[] = [];',
+      '+  for (let i = start; i <= end; i++) {',
+      '+    result.push(i);',
+      '+  }',
+      '--- src/utils/range.test.ts (added)',
+      '@@ -0,0 +1,6 @@',
+      '+describe("inclusiveRange", () => {',
+      '+  it("includes both endpoints", () => {',
+      '+    expect(inclusiveRange(1, 3)).toEqual([1, 2, 3]);',
+      '+  });',
+      '+});',
+    ].join('\n');
+    const provider = new MockProvider();
+    const { content } = await provider.complete(safePrompt);
+    expect(content).toBe('[]');
+  });
 });
 
 describe('MockProvider (scripted)', () => {

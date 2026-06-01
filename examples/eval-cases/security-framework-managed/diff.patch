@@ -1,0 +1,16 @@
+diff --git a/src/components/profile-card.tsx b/src/components/profile-card.tsx
+new file mode 100644
+--- /dev/null
++++ b/src/components/profile-card.tsx
+@@ -0,0 +1,11 @@
++import React from 'react';
++
++export function ProfileCard({ name }: { name: string }) {
++  // JSX auto-escapes user input; no raw HTML rendering.
++  return <div className="profile-card">{name}</div>;
++}
++
++export function protectProfileRoute() {
++  router.use(requireAdmin());
++  return null;
++}

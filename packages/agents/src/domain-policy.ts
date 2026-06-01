@@ -2,6 +2,7 @@ import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -40,6 +41,8 @@ export class DomainPolicyAgent extends BaseAgent {
       'ROLE',
       'Evaluate the diff against the client rules below. These rules are team requirements — be STRICT. Flag concrete violations only.',
       '',
+      CONSERVATIVE_FINDING_BLOCK,
+      '',
       'RULES',
       'Each rule block may have frontmatter with a `globs` pattern. Only apply a rule if the changed file matches its glob. If no glob is specified, the rule applies to all files.',
       '',
@@ -48,6 +51,7 @@ export class DomainPolicyAgent extends BaseAgent {
       'HOW TO FLAG',
       '- Quote the specific rule text being violated in `clientRuleReferences` (use the rule file path)',
       '- Only flag concrete, verifiable violations — not speculative or possible violations',
+      '- If the rule text does not clearly cover the changed line, do not infer a violation',
       '- Set `evidence` to the exact diff line that violates the rule',
       '- Set `falsePositiveRisk: low` for clear rule violations',
       '- Set `falsePositiveRisk: medium` if the violation depends on runtime context',

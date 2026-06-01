@@ -7,6 +7,7 @@ import type { Provider } from '@engagement-harness/providers';
 import chalk from 'chalk';
 
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   renderDiffSummary,
   renderFileContext,
@@ -87,6 +88,8 @@ export class CrossFileReviewer {
       'You see ALL changed files TOGETHER. Report ONLY issues that are invisible when',
       'reviewing any single file in isolation — issues that require seeing two or more',
       'files at once. Be CONSERVATIVE.',
+      '',
+      CONSERVATIVE_FINDING_BLOCK,
       '',
       'CROSS-FILE PATTERNS TO LOOK FOR',
       '',

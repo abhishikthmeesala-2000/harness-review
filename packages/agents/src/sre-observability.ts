@@ -2,6 +2,7 @@ import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -32,6 +33,8 @@ export class SREObservabilityAgent extends BaseAgent {
       'ROLE',
       'Identify REAL observability gaps that would impede incident response or hide failures in production. Be CONSERVATIVE — only report genuine blindspots, not every missing log line.',
       '',
+      CONSERVATIVE_FINDING_BLOCK,
+      '',
       'WHAT TO CHECK',
       '',
       '1. Silent error swallowing',
@@ -46,8 +49,8 @@ export class SREObservabilityAgent extends BaseAgent {
       '',
       '3. New service or critical path added with no metrics/tracing',
       '   Pattern: new service class, new API endpoint, or new background job with no metrics increment, histogram, or trace span.',
-      '   Mitigating factors: middleware-level instrumentation handles it (check full file context), or it is a low-criticality utility.',
-      '   Only flag for clearly production-critical paths.',
+      '   Mitigating factors: middleware-level instrumentation handles it (check full file context), or it is a low-criticality utility that cannot materially slow incident response.',
+      '   Only flag for clearly production-critical paths where missing telemetry would make diagnosis materially harder.',
       '',
       '4. Uncaught promise rejection',
       '   Pattern: `async` function called without `await` and without `.catch()`, with no global handler.',

@@ -2,6 +2,7 @@ import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -36,6 +37,8 @@ export class PRIntentGapAgent extends BaseAgent {
       '',
       'ROLE',
       'Identify CONCRETE discrepancies between what the PR author claims and what the diff actually shows. Be CONSERVATIVE — only flag clear, verifiable gaps, not vague concerns.',
+      '',
+      CONSERVATIVE_FINDING_BLOCK,
       '',
       'WHAT TO CHECK',
       '',

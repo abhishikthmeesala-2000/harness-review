@@ -2,6 +2,7 @@ import type { ContextBundle } from '@engagement-harness/core';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -38,6 +39,8 @@ export class DesignPrinciplesAgent extends BaseAgent {
       'Identify SIGNIFICANT design issues that will cause real maintenance problems. Be CONSERVATIVE — only report clear, impactful violations, not style preferences.',
       'Evidence MUST cite a specific code line from the diff.',
       '',
+      CONSERVATIVE_FINDING_BLOCK,
+      '',
       'WHAT TO CHECK',
       '',
       '1. Single Responsibility Principle (SRP) violation',
@@ -65,6 +68,7 @@ export class DesignPrinciplesAgent extends BaseAgent {
       '- DRY violations involving only 2 occurrences (rule of three)',
       '- Naming in test files',
       '- Changes under 20 total lines (trivial patches, single-line fixes)',
+      '- Problems that are only hypothetical future-maintenance concerns without a concrete current consequence',
       '',
       'CONSERVATIVE REPORTING RULES',
       '- Must cite exact line from diff as evidence',

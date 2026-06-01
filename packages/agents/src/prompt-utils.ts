@@ -35,6 +35,21 @@ export const FINDING_SCHEMA_BLOCK = `Return ONLY a JSON array. Each element must
 Return [] if you find nothing worth flagging. Do NOT wrap in markdown fences.`;
 
 /**
+ * Shared decision discipline for all finding-producing agents. The goal is to
+ * bias strongly toward silence unless the issue is directly visible in the
+ * changed lines and still looks wrong after checking the supplied context.
+ */
+export const CONSERVATIVE_FINDING_BLOCK = `DECISION RULES:
+- Prefer false negatives over false positives. If the issue is only plausible, return [].
+- Only report issues directly visible in the changed lines and confirmed by the supplied context.
+- Do not infer missing guards, tests, auth, validation, or cleanup from absence alone.
+- If a framework, library, or higher-level layer could plausibly handle it, do not report unless the prompt rules explicitly rule that out.
+- Require a concrete failure mode that you can describe in one sentence.
+- Do not report style, refactor, or hypothetical future-maintenance concerns unless the prompt explicitly asks for them.
+- If you cannot cite exact evidence and explain the failure path without hedging, return [].
+`;
+
+/**
  * Shared severity rubric appended to every finding agent's prompt so live LLMs
  * grade severity consistently and conservatively. Includes concrete ✅/❌ code
  * examples for each level plus the conservative-reporting rules.
@@ -75,7 +90,7 @@ CONSERVATIVE REPORTING RULES:
 - Only report issues IN changed lines or CAUSED BY changes.
 - Set falsePositiveRisk by certainty: low = obvious, no mitigating factors; medium = likely, some context unclear; high = possible, significant uncertainty.
 - Do NOT report if falsePositiveRisk would be high.
-- Quote EXACT evidence from the file.
+- Quote EXACT evidence from the file, context, or rule text as appropriate.
 - If uncertain, do not report.`;
 
 export function renderFileContext(entries: ContextEntry[]): string {

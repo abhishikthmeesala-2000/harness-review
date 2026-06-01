@@ -33,13 +33,13 @@ const ALL_AGENTS_CONFIG = ConfigSchema.parse({
 });
 
 describe('EvalRunner integration', () => {
-  it('runs all 6 cases and returns a report', async () => {
+  it('runs all 9 cases and returns a report', async () => {
     const report = await EvalRunner.runAll(CASES_DIR, ALL_AGENTS_CONFIG);
-    expect(report.totalCases).toBe(6);
-    expect(report.results.length).toBe(6);
+    expect(report.totalCases).toBe(9);
+    expect(report.results.length).toBe(9);
   });
 
-  it('all 6 eval cases pass', async () => {
+  it('all 9 eval cases pass', async () => {
     const report = await EvalRunner.runAll(CASES_DIR, ALL_AGENTS_CONFIG);
     for (const result of report.results) {
       expect(result.errors, `case ${result.caseId} errors: ${result.errors.join('; ')}`).toEqual(
@@ -47,7 +47,7 @@ describe('EvalRunner integration', () => {
       );
       expect(result.passed, `case ${result.caseId} should pass`).toBe(true);
     }
-    expect(report.passed).toBe(6);
+    expect(report.passed).toBe(9);
     expect(report.failed).toBe(0);
   });
 

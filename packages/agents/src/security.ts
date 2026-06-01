@@ -3,6 +3,7 @@ import type { CompletionOptions } from '@engagement-harness/providers';
 
 import { BaseAgent } from './base.js';
 import {
+  CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
   SEVERITY_CRITERIA_BLOCK,
   renderDiffSummary,
@@ -38,6 +39,8 @@ export class SecurityAgent extends BaseAgent {
       '',
       'ROLE',
       'Identify REAL security vulnerabilities with high confidence. Be CONSERVATIVE — only report issues you are certain about after checking for mitigating factors.',
+      '',
+      CONSERVATIVE_FINDING_BLOCK,
       '',
       'WHAT TO CHECK',
       '',
@@ -92,6 +95,7 @@ export class SecurityAgent extends BaseAgent {
       '- React JSX interpolation (auto-escaped)',
       '- Template engines with auto-escape enabled by default (Handlebars, Nunjucks)',
       '- Auth middleware applied at router/app level (visible in full file context)',
+      '- Input that is not attacker-controlled (server constants, config, generated IDs)',
       '- Test files (*.test.ts, *.spec.ts, __tests__/*) unless they expose real credentials',
       '',
       'CONSERVATIVE REPORTING RULES',

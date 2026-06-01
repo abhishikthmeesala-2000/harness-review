@@ -346,6 +346,41 @@ function findSuspiciousLine(addedLines: string[], signals: RegExp[]): string | n
   return null;
 }
 
+function hasSignal(addedLines: string[], signals: RegExp[]): boolean {
+  return addedLines.some((line) => signals.some((signal) => signal.test(line)));
+}
+
+const SAFE_SECURITY_SIGNALS: RegExp[] = [
+  /\brequireAdmin\s*\(/i,
+  /\bauthMiddleware\b/i,
+  /\bauthenticated\b/i,
+  /\bauto-escap(?:e|es|ed)\b/i,
+  /\bjsx\b/i,
+  /\bdompurify\b/i,
+  /\bsanitize-html\b/i,
+];
+
+const SAFE_CORRECTNESS_SIGNALS: RegExp[] = [
+  /\binclusiveRange\b/i,
+  /\binclusive by design\b/i,
+  /\bend is inclusive\b/i,
+  /\binclusive boundary\b/i,
+];
+
+const SAFE_TESTING_SIGNALS: RegExp[] = [
+  /\bdescribe\s*\(/i,
+  /\bit\s*\(/i,
+  /\btest\s*\(/i,
+  /\bexpect\s*\(/i,
+];
+
+function shouldSuppressFixture(dimension: string, addedLines: string[]): boolean {
+  if (dimension.includes('security')) return hasSignal(addedLines, SAFE_SECURITY_SIGNALS);
+  if (dimension.includes('correctness')) return hasSignal(addedLines, SAFE_CORRECTNESS_SIGNALS);
+  if (dimension.includes('testing')) return hasSignal(addedLines, SAFE_TESTING_SIGNALS);
+  return false;
+}
+
 /**
  * Patch a JSON-array fixture so findings reference the real diff's file and
  * line range. For the security dimension, diff-type evidence is also updated
@@ -361,6 +396,10 @@ function patchFindings(raw: string, ctx: DiffContext, dimension: string): string
     return raw;
   }
   if (!Array.isArray(parsed)) return raw; // remediation object — leave untouched
+
+  if (shouldSuppressFixture(dimension, ctx.addedLines)) {
+    return EMPTY_RESPONSE;
+  }
 
   const suspiciousLine = dimension.includes('security')
     ? findSuspiciousLine(ctx.addedLines, SECURITY_SIGNALS)

@@ -1,0 +1,12 @@
+{
+  "name": "security-framework-managed",
+  "description": "Safe UI and router-level auth change — security agent should stay silent.",
+  "fixtureRepoPath": ".",
+  "baseRef": "HEAD~1",
+  "headRef": "HEAD",
+  "prTitle": "Add profile card with framework-managed protections",
+  "prBody": "The component uses JSX escaping and router-level authorization. No raw HTML or unauthenticated write path is introduced.",
+  "expectedFindings": [],
+  "expectedDecision": "approved",
+  "maxFalsePositives": 0
+}
