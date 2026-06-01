@@ -44,23 +44,32 @@ export class AnthropicProvider implements Provider {
       model: this.config.model || 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: prompt }],
       max_tokens: options?.maxTokens ?? 4000,
-      // Extended thinking requires temperature=1; otherwise use 0.1 for precise analysis.
-      temperature: useThinking ? 1 : (options?.temperature ?? 0.1),
     };
+    // Extended thinking must not include temperature at all — the API rejects requests
+    // that include temperature alongside the thinking parameter.
+    if (!useThinking) {
+      body['temperature'] = options?.temperature ?? 0.1;
+    }
     if (options?.system) body.system = options.system;
     if (useThinking) {
       body['thinking'] = { type: 'enabled', budget_tokens: thinkingBudget };
+    }
+
+    const headers: Record<string, string> = {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    };
+    // Extended thinking requires the interleaved-thinking beta header.
+    if (useThinking) {
+      headers['anthropic-beta'] = 'interleaved-thinking-2025-05-14';
     }
 
     let response: Response;
     try {
       response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(body),
       });
     } catch (err) {
