@@ -13,6 +13,7 @@ export interface PipelineMetrics {
   publishedCount: number;
   rejectedByStage: Record<string, number>;
   verifierApprovalRate: number;
+  truthVerifierApprovalRate?: number;
   evidenceDistribution: Record<EvidenceLevel, number>;
 }
 

@@ -19,6 +19,8 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "@engagement-harness/core": "workspace:*"
+    "@engagement-harness/core": "workspace:*",
+    "@engagement-harness/providers": "workspace:*",
+    "zod": "^4.4.1"
   }
 }

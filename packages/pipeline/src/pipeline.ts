@@ -1,5 +1,6 @@
 import type { CandidateFinding, Config, ContextBundle, Finding } from '@engagement-harness/core';
 import { CandidateFindingSchema, FindingSchema } from '@engagement-harness/core';
+import type { Provider } from '@engagement-harness/providers';
 
 import { ConfidenceScorer } from './confidence-scorer.js';
 import { Deduplicator } from './deduplicator.js';
@@ -7,6 +8,7 @@ import { EvidenceScorer } from './evidence-scorer.js';
 import { PolicyEngine } from './policy-engine.js';
 import { QualityGate } from './quality-gate.js';
 import type { EvidenceLevel, PipelineResult, RejectedEntry } from './types.js';
+import { TruthVerifierStage } from './truth-verifier-stage.js';
 import { Verifier } from './verifier.js';
 
 export const FindingPipeline = {
@@ -14,6 +16,7 @@ export const FindingPipeline = {
     candidates: CandidateFinding[],
     context: ContextBundle,
     config: Config,
+    provider?: Provider,
   ): Promise<PipelineResult> {
     const rejected: RejectedEntry[] = [];
     const evidenceLevels = new Map<string, EvidenceLevel>();
@@ -38,13 +41,22 @@ export const FindingPipeline = {
       evidenceLevels.set(f.id, EvidenceScorer.score(f, context.diff));
     }
 
-    // Stage 3: verify
-    const verified: CandidateFinding[] = [];
+    // Stage 3: schema-level heuristic verify
+    const schemaVerified: CandidateFinding[] = [];
     let approvedCount = 0;
     for (const f of valid) {
       const result = Verifier.verify(f, context);
-      verified.push(result);
+      schemaVerified.push(result);
       if (result.verification.status === 'approved') approvedCount++;
+    }
+
+    // Stage 3.5: LLM truth verifier (only when a provider is supplied)
+    let verified = schemaVerified;
+    let truthVerifierApprovalRate: number | undefined;
+    if (provider) {
+      const tvResult = await TruthVerifierStage.run(schemaVerified, context, provider);
+      verified = tvResult.candidates;
+      truthVerifierApprovalRate = tvResult.truthVerifierApprovalRate;
     }
 
     // Stage 4: confidence calibrate → upgrade to Finding
@@ -133,6 +145,7 @@ export const FindingPipeline = {
         publishedCount: passed.length,
         rejectedByStage,
         verifierApprovalRate,
+        ...(truthVerifierApprovalRate !== undefined ? { truthVerifierApprovalRate } : {}),
         evidenceDistribution,
       },
     };
