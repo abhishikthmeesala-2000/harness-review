@@ -50,6 +50,12 @@ jobs:
           restore-keys: |
             known-findings-pr-${{ github.event.pull_request.number }}
 
+      - name: Run quality gates
+        run: |
+          pnpm lint
+          pnpm typecheck
+          pnpm test
+
       - name: Run review
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
