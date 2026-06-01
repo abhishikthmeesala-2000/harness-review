@@ -32,8 +32,12 @@ export abstract class BaseAgent {
   /**
    * Per-agent completion options (e.g. extendedThinking for high-stakes agents).
    * Merged with provider defaults; agent values take precedence.
+   *
+   * The provider is passed so subclasses can gate model-specific options (such as
+   * extendedThinking) on the model name exposed by `provider.model`.
    */
-  completionOptions(): CompletionOptions {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  completionOptions(_provider?: Provider): CompletionOptions {
     return {};
   }
 
@@ -50,7 +54,7 @@ export abstract class BaseAgent {
     const prompt = this.promptTemplate(context);
     if (!prompt) return [];
 
-    const opts: CompletionOptions = { ...this.completionOptions() };
+    const opts: CompletionOptions = { ...this.completionOptions(provider) };
     const sys = this.systemPrompt();
     if (sys) opts.system = sys;
 
@@ -91,6 +95,21 @@ export abstract class BaseAgent {
     }
     return accepted;
   }
+}
+
+/**
+ * Returns true when the given model identifier is known to support Anthropic's
+ * extended thinking feature. Models containing "opus" or "sonnet" support it;
+ * "haiku" models and any unrecognised model name do not.
+ *
+ * Pass `undefined` (e.g. when the provider exposes no model name) to safely
+ * default to false — better to omit extended thinking than to send an
+ * unsupported parameter and receive an HTTP 400.
+ */
+export function supportsExtendedThinking(model: string | undefined): boolean {
+  if (!model) return false;
+  const lower = model.toLowerCase();
+  return lower.includes('opus') || lower.includes('sonnet');
 }
 
 function extractJsonArray(raw: string): unknown[] | null {

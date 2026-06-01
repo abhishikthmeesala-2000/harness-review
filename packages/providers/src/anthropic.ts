@@ -3,6 +3,7 @@ import { ProviderError } from './interface.js';
 
 export interface AnthropicProviderConfig {
   model: string;
+  temperature?: number;
 }
 
 type AnthropicContentBlock =
@@ -17,10 +18,12 @@ interface AnthropicMessagesResponse {
 
 export class AnthropicProvider implements Provider {
   public readonly name = 'anthropic';
+  public readonly model: string;
   protected readonly config: AnthropicProviderConfig;
 
   constructor(config: AnthropicProviderConfig) {
     this.config = config;
+    this.model = config.model;
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult> {
@@ -48,7 +51,7 @@ export class AnthropicProvider implements Provider {
     // Extended thinking must not include temperature at all — the API rejects requests
     // that include temperature alongside the thinking parameter.
     if (!useThinking) {
-      body['temperature'] = options?.temperature ?? 0.1;
+      body['temperature'] = options?.temperature ?? (this.config as any).temperature ?? 0.1;
     }
     if (options?.system) body.system = options.system;
     if (useThinking) {

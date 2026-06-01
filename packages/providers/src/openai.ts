@@ -12,10 +12,12 @@ interface OpenAIChatResponse {
 
 export class OpenAIProvider implements Provider {
   public readonly name = 'openai';
+  public readonly model: string;
   protected readonly config: OpenAIProviderConfig;
 
   constructor(config: OpenAIProviderConfig) {
     this.config = config;
+    this.model = config.model;
   }
 
   async complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult> {

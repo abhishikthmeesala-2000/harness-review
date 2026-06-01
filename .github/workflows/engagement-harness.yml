@@ -43,7 +43,7 @@ jobs:
           sudo chmod +x /usr/local/bin/engagement-harness
 
       - name: Restore findings cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .engagement-harness/findings/
           key: known-findings-pr-${{ github.event.pull_request.number }}
@@ -68,7 +68,7 @@ jobs:
 
       - name: Save findings cache
         if: always()
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .engagement-harness/findings/
           key: known-findings-pr-${{ github.event.pull_request.number }}
