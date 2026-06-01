@@ -82,11 +82,11 @@ export const ConfigSchema = z
     feedback: z
       .object({
         enabled: z.boolean().default(true),
-        autoCollect: z.boolean().default(false),
+        autoCollect: z.boolean().default(true),
         collectionSchedule: z.string().optional(),
         retentionDays: z.number().int().positive().optional(),
       })
-      .default({ enabled: true, autoCollect: false }),
+      .default({ enabled: true, autoCollect: true }),
     reports: z
       .object({
         formats: z
