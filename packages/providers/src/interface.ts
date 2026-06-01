@@ -18,6 +18,8 @@ export interface CompletionResult {
 
 export interface Provider {
   readonly name: string;
+  /** The model identifier in use, if known. Used by agents to gate model-specific options. */
+  readonly model?: string;
   complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult>;
 }
 

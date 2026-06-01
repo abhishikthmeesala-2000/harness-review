@@ -1,7 +1,7 @@
 import type { ContextBundle } from '@engagement-harness/core';
-import type { CompletionOptions } from '@engagement-harness/providers';
+import type { CompletionOptions, Provider } from '@engagement-harness/providers';
 
-import { BaseAgent } from './base.js';
+import { BaseAgent, supportsExtendedThinking } from './base.js';
 import {
   CONSERVATIVE_FINDING_BLOCK,
   FINDING_SCHEMA_BLOCK,
@@ -27,10 +27,12 @@ export class SecurityAgent extends BaseAgent {
     ].join(' ');
   }
 
-  override completionOptions(): CompletionOptions {
+  override completionOptions(provider?: Provider): CompletionOptions {
     // Security analysis benefits most from extended thinking — attack path
     // tracing requires following data flow across multiple hops.
-    return { extendedThinking: 10000 };
+    // Only enabled for models that support it (opus/sonnet); haiku and unknown
+    // models omit the budget to avoid HTTP 400 errors.
+    return { extendedThinking: supportsExtendedThinking(provider?.model) ? 10000 : undefined };
   }
 
   promptTemplate(context: ContextBundle): string {

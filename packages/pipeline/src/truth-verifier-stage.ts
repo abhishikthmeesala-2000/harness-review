@@ -15,11 +15,7 @@ function applyVerdict(finding: CandidateFinding, verdict: TruthVerdict): Candida
   const wouldApprove = verdict.decision === 'approved' || verdict.decision === 'downgrade';
 
   if (wouldApprove) {
-    const hardGatesFail =
-      verdict.confidence < 0.75 ||
-      finding.evidence.length === 0 ||
-      finding.whyItMatters.length === 0 ||
-      finding.suggestedFix.length === 0;
+    const hardGatesFail = verdict.confidence < 0.75;
 
     if (hardGatesFail) {
       return {
@@ -119,7 +115,7 @@ export const TruthVerifierStage = {
 
     const approvedCount = processed.filter((c) => c.verification.status === 'approved').length;
     const truthVerifierApprovalRate =
-      toVerify.length > 0 ? approvedCount / toVerify.length : 1.0;
+      toVerify.length > 0 ? approvedCount / toVerify.length : 0;
 
     return { candidates: allCandidates, truthVerifierApprovalRate };
   },

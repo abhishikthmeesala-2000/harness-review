@@ -52,7 +52,9 @@ function installFetch(
   return calls;
 }
 
-const opts = { token: 't', owner: 'acme', repo: 'app', runId: 'run-1' };
+// diffRightLines covers the lines used by makeFinding() so inline placement is attempted.
+const diffRightLines = new Map([['src/auth.ts', new Set([40, 41, 42, 43, 44, 45])]]);
+const opts = { token: 't', owner: 'acme', repo: 'app', runId: 'run-1', diffRightLines };
 
 beforeEach(() => {
   vi.restoreAllMocks();
