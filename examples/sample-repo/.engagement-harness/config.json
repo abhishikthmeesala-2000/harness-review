@@ -24,6 +24,10 @@
     "postComments": false,
     "artifactsOnly": true
   },
+  "feedback": {
+    "enabled": true,
+    "autoCollect": true
+  },
   "reports": {
     "formats": ["json", "markdown", "html"],
     "outputDir": ".engagement-harness/reports"
