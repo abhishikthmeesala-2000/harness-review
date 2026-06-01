@@ -43,6 +43,21 @@ describe('ciTemplatesCommand', () => {
       expect(content).toContain('name: Engagement Harness Review');
     });
 
+    it('source template includes Run quality gates before Run review', () => {
+      ciTemplatesCommand({ platform: 'github', context: 'source' });
+      const content = readFileSync(
+        path.join(dir, '.github', 'workflows', 'engagement-harness.yml'),
+        'utf8',
+      );
+      expect(content).toContain('Run quality gates');
+      expect(content).toContain('pnpm lint');
+      expect(content).toContain('pnpm typecheck');
+      expect(content).toContain('pnpm test');
+      const qualityIdx = content.indexOf('Run quality gates');
+      const reviewIdx  = content.indexOf('Run review');
+      expect(qualityIdx).toBeLessThan(reviewIdx);
+    });
+
     it('also writes feedback-on-merge.yml and collect-feedback.yml alongside engagement-harness.yml', () => {
       ciTemplatesCommand({ platform: 'github' });
 
