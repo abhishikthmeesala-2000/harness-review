@@ -137,7 +137,7 @@ describe('AnthropicProvider', () => {
     expect(body['system']).toBeUndefined();
   });
 
-  it('sends thinking block and forces temperature=1 when extendedThinking is set', async () => {
+  it('sends thinking block and omits temperature when extendedThinking is set', async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       makeResponse({
         content: [
@@ -147,13 +147,13 @@ describe('AnthropicProvider', () => {
       }),
     );
 
-    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-20250514' });
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-6' });
     const result = await provider.complete('hello', { extendedThinking: 2000 });
 
     const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     expect(body['thinking']).toEqual({ type: 'enabled', budget_tokens: 2000 });
-    expect(body['temperature']).toBe(1);
+    expect(body['temperature']).toBeUndefined();
     expect(result.content).toBe('result');
   });
 
