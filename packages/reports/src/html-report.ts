@@ -57,7 +57,7 @@ function renderFinding(f: Finding): string {
 
 export const HtmlReport = {
   generate(result: PipelineResult, meta: RunMetadata): string {
-    const { published, decision, overallConfidence, metrics } = result;
+    const { published, rejected, decision, overallConfidence, metrics } = result;
 
     const byDimension = new Map<string, Finding[]>();
     for (const f of published) {
@@ -136,6 +136,31 @@ export const HtmlReport = {
     <tr><th>Level</th><th>Count</th></tr>
     ${evidenceRows}
   </table>
+
+  <h2>Rejected Findings (for tuning)</h2>
+  ${
+    rejected.length === 0
+      ? '<p><em>No findings were rejected.</em></p>'
+      : `<table>
+    <tr><th>Title</th><th>File</th><th>Severity</th><th>Confidence</th><th>Stage</th><th>Reason</th></tr>
+    ${rejected
+      .map((r) => {
+        const f = r.finding;
+        const conf =
+          typeof f.confidence === 'number' ? `${Math.round(f.confidence * 100)}%` : '—';
+        const color = SEVERITY_COLOR[f.severity ?? ''] ?? '#64748b';
+        return `<tr>
+      <td>${esc(f.title)}</td>
+      <td><code>${esc(f.file ?? '')}</code></td>
+      <td><span style="color:${color};font-weight:bold">${esc((f.severity ?? '').toUpperCase())}</span></td>
+      <td>${conf}</td>
+      <td>${esc(r.stage)}</td>
+      <td>${esc(r.reason)}</td>
+    </tr>`;
+      })
+      .join('\n')}
+  </table>`
+  }
 
   <h2>Run Metadata</h2>
   <table>

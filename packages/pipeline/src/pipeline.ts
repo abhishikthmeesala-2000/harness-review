@@ -85,16 +85,7 @@ export const FindingPipeline = {
 
     // Stage 6: quality gate
     const { passed, failed: gateFailed } = QualityGate.filter(kept, config);
-    for (const f of gateFailed) {
-      // Determine reason: verifier rejected, below confidence, or below severity
-      let reason: string;
-      if (f.verification.status === 'rejected') {
-        reason = `verifier rejected: ${f.verification.reason}`;
-      } else if (f.confidence < config.review.confidenceThreshold) {
-        reason = `confidence ${f.confidence.toFixed(2)} below threshold ${config.review.confidenceThreshold}`;
-      } else {
-        reason = `severity "${f.severity}" below threshold "${config.review.severityThreshold}"`;
-      }
+    for (const { finding: f, reason } of gateFailed) {
       rejected.push({ finding: f, reason, stage: 'quality-gate' });
     }
 
