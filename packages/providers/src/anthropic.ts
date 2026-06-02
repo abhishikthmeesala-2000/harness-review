@@ -43,10 +43,16 @@ export class AnthropicProvider implements Provider {
     }
     const useThinking = thinkingBudget !== undefined && thinkingBudget > 0;
 
+    // When extended thinking is enabled, max_tokens must exceed budget_tokens
+    // (Anthropic API requirement). Use whichever is larger: the caller's explicit
+    // maxTokens, or budget_tokens + 4000 to leave headroom for the text response.
+    const defaultMaxTokens = useThinking
+      ? Math.max(4000, (thinkingBudget ?? 0) + 4000)
+      : 4000;
     const body: Record<string, unknown> = {
       model: this.config.model || 'claude-sonnet-4-6',
       messages: [{ role: 'user', content: prompt }],
-      max_tokens: options?.maxTokens ?? 4000,
+      max_tokens: options?.maxTokens ?? defaultMaxTokens,
     };
     // Extended thinking must not include temperature at all — the API rejects requests
     // that include temperature alongside the thinking parameter.
