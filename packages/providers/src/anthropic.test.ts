@@ -191,4 +191,30 @@ describe('AnthropicProvider', () => {
       'extendedThinking budget must be at least 1024 tokens',
     );
   });
+
+  it('sets max_tokens to budget_tokens + 4000 when extendedThinking exceeds default', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({ content: [{ type: 'text', text: 'ok' }] }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-6' });
+    await provider.complete('hello', { extendedThinking: 10000 });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['max_tokens']).toBe(14000); // 10000 + 4000
+  });
+
+  it('respects explicit maxTokens over the extended-thinking default', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      makeResponse({ content: [{ type: 'text', text: 'ok' }] }),
+    );
+
+    const provider = new AnthropicProvider({ model: 'claude-sonnet-4-6' });
+    await provider.complete('hello', { extendedThinking: 10000, maxTokens: 20000 });
+
+    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body['max_tokens']).toBe(20000);
+  });
 });

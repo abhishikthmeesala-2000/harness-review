@@ -110,6 +110,41 @@ describe('BaseAgent.run', () => {
     warnSpy.mockRestore();
   });
 
+  it('extracts JSON array when trailing text contains brackets like [OWASP-A1]', async () => {
+    const validItem = {
+      id: 'EH-1',
+      title: 't',
+      category: 'correctness',
+      dimension: 'correctness',
+      severity: 'low',
+      file: 'a.ts',
+      lineStart: 1,
+      lineEnd: 1,
+      evidence: [{ type: 'diff', content: 'x' }],
+      whyItMatters: 'w',
+      suggestedFix: 's',
+      clientRuleReferences: [],
+      falsePositiveRisk: 'low',
+      sourceAgent: 'stub',
+      modelProvider: 'mock',
+      remediationReadiness: 'ready',
+    };
+    const response = `${JSON.stringify([validItem])}\nSee also: [OWASP-A1] and [OWASP-A3].`;
+    const result = await new StubAgent().run(makeBundle(), fakeProvider(response));
+    expect(result).toHaveLength(1);
+  });
+
+  it('returns [] (not a warning) when model returns plain-text no-findings prose', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await new StubAgent().run(
+      makeBundle(),
+      fakeProvider('No security issues found.'),
+    );
+    expect(result).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
   it('overwrites sourceAgent and modelProvider on every accepted candidate', async () => {
     const validItem = {
       id: 'EH-1',

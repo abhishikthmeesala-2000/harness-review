@@ -112,8 +112,18 @@ export function supportsExtendedThinking(model: string | undefined): boolean {
   return lower.includes('opus') || lower.includes('sonnet');
 }
 
+// Maps common "no findings" natural-language responses to "[]" so extractJsonArray
+// can return an empty array instead of null when the model ignores the Return [] instruction.
+function normalizeEmptyResponse(raw: string): string {
+  const t = raw.trim().toLowerCase();
+  if (!t.includes('[') && (t === '' || /^(no |none\b|nothing\b|clean\b)/.test(t))) {
+    return '[]';
+  }
+  return raw;
+}
+
 function extractJsonArray(raw: string): unknown[] | null {
-  const trimmed = raw.trim();
+  const trimmed = normalizeEmptyResponse(raw).trim();
   // Fast path: response is already a JSON array.
   try {
     const direct: unknown = JSON.parse(trimmed);
@@ -121,10 +131,25 @@ function extractJsonArray(raw: string): unknown[] | null {
   } catch {
     // Fall through to substring extraction.
   }
-  // Best-effort: find the first [...] block and parse it.
+  // Best-effort: find the first balanced [...] block and parse it.
+  // Uses bracket-counting rather than lastIndexOf so trailing text like
+  // "[OWASP-A1]" or "[see above]" after the JSON array does not overshoot
+  // to the wrong closing bracket and produce a malformed JSON string.
   const start = trimmed.indexOf('[');
-  const end = trimmed.lastIndexOf(']');
-  if (start === -1 || end === -1 || end < start) return null;
+  if (start === -1) return null;
+  let depth = 0;
+  let end = -1;
+  for (let i = start; i < trimmed.length; i++) {
+    if (trimmed[i] === '[') depth++;
+    else if (trimmed[i] === ']') {
+      depth--;
+      if (depth === 0) {
+        end = i;
+        break;
+      }
+    }
+  }
+  if (end === -1) return null;
   try {
     const parsed: unknown = JSON.parse(trimmed.slice(start, end + 1));
     return Array.isArray(parsed) ? parsed : null;
