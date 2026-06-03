@@ -48,21 +48,8 @@ jobs:
         with:
           version: 10
 
-      - name: Verify HARNESS_PAT secret
-        env:
-          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
-        run: |
-          if [ -z "$HARNESS_PAT" ]; then
-            echo "❌ HARNESS_PAT secret is not configured."
-            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
-            echo "   as a repository secret named HARNESS_PAT."
-            echo "   Settings → Secrets and variables → Actions → New repository secret"
-            exit 1
-          fi
-          echo "✓ HARNESS_PAT is set"
-
       - name: Clone Engagement Harness
-        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
 
       - name: Build Engagement Harness
         run: |
@@ -203,7 +190,7 @@ engagement-harness-review:
     GITHUB_REPOSITORY: '$CI_PROJECT_PATH'
   script:
     - npm install -g pnpm
-    - git clone https://oauth2:\${HARNESS_PAT}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+    - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
     - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
     - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
     - cd $CI_PROJECT_DIR
@@ -239,7 +226,7 @@ steps:
     displayName: 'Install pnpm'
 
   - script: |
-      git clone https://x-access-token:$(HARNESS_PAT)@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+      git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
       cd /tmp/harness-review
       pnpm install --frozen-lockfile
       pnpm build
@@ -274,7 +261,7 @@ pipelines:
           image: node:20
           script:
             - npm install -g pnpm
-            - git clone https://x-access-token:\${HARNESS_PAT}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+            - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
             - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
             - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
             - cd $BITBUCKET_CLONE_DIR
@@ -317,21 +304,8 @@ jobs:
         with:
           version: 10
 
-      - name: Verify HARNESS_PAT secret
-        env:
-          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
-        run: |
-          if [ -z "$HARNESS_PAT" ]; then
-            echo "❌ HARNESS_PAT secret is not configured."
-            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
-            echo "   as a repository secret named HARNESS_PAT."
-            echo "   Settings → Secrets and variables → Actions → New repository secret"
-            exit 1
-          fi
-          echo "✓ HARNESS_PAT is set"
-
       - name: Clone Engagement Harness
-        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
@@ -398,21 +372,8 @@ jobs:
         with:
           version: 10
 
-      - name: Verify HARNESS_PAT secret
-        env:
-          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
-        run: |
-          if [ -z "$HARNESS_PAT" ]; then
-            echo "❌ HARNESS_PAT secret is not configured."
-            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
-            echo "   as a repository secret named HARNESS_PAT."
-            echo "   Settings → Secrets and variables → Actions → New repository secret"
-            exit 1
-          fi
-          echo "✓ HARNESS_PAT is set"
-
       - name: Clone Engagement Harness
-        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |

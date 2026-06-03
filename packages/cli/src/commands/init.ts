@@ -712,15 +712,6 @@ export async function setupCiWorkflow(
       workflowCount = 3;
     }
     console.log(chalk.green('✓') + ` Created ${workflowCount} workflow file${workflowCount > 1 ? 's' : ''}`);
-    console.log('');
-    console.log(chalk.yellow('⚠️  Action required: add HARNESS_PAT secret to this repository'));
-    console.log('   The generated workflows clone the private engagement-harness repo.');
-    console.log('   Without this secret, workflows will fail with a git authentication error.');
-    console.log('');
-    console.log('   1. Create a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review');
-    console.log('      https://github.com/settings/tokens/new?scopes=repo&description=HARNESS_PAT');
-    console.log('   2. Add it as a repository secret named: HARNESS_PAT');
-    console.log('      Settings → Secrets and variables → Actions → New repository secret');
 
     if (options.filesCreated) {
       options.filesCreated.push(path.join(workflowDir, 'engagement-harness.yml'));
