@@ -49,7 +49,7 @@ jobs:
           version: 10
 
       - name: Clone Engagement Harness
-        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
 
       - name: Build Engagement Harness
         run: |
@@ -190,7 +190,7 @@ engagement-harness-review:
     GITHUB_REPOSITORY: '$CI_PROJECT_PATH'
   script:
     - npm install -g pnpm
-    - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+    - git clone https://oauth2:\${HARNESS_PAT}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
     - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
     - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
     - cd $CI_PROJECT_DIR
@@ -226,7 +226,7 @@ steps:
     displayName: 'Install pnpm'
 
   - script: |
-      git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+      git clone https://x-access-token:$(HARNESS_PAT)@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
       cd /tmp/harness-review
       pnpm install --frozen-lockfile
       pnpm build
@@ -261,7 +261,7 @@ pipelines:
           image: node:20
           script:
             - npm install -g pnpm
-            - git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+            - git clone https://x-access-token:\${HARNESS_PAT}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
             - cd /tmp/harness-review && pnpm install --frozen-lockfile && pnpm build
             - printf '#!/bin/sh\\nexec node /tmp/harness-review/packages/cli/dist/bin/engagement-harness.js "$@"\\n' > /usr/local/bin/engagement-harness && chmod +x /usr/local/bin/engagement-harness
             - cd $BITBUCKET_CLONE_DIR
@@ -305,7 +305,7 @@ jobs:
           version: 10
 
       - name: Clone Engagement Harness
-        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
@@ -373,7 +373,7 @@ jobs:
           version: 10
 
       - name: Clone Engagement Harness
-        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
