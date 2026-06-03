@@ -48,8 +48,21 @@ jobs:
         with:
           version: 10
 
+      - name: Verify HARNESS_PAT secret
+        env:
+          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
+        run: |
+          if [ -z "$HARNESS_PAT" ]; then
+            echo "❌ HARNESS_PAT secret is not configured."
+            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
+            echo "   as a repository secret named HARNESS_PAT."
+            echo "   Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+          echo "✓ HARNESS_PAT is set"
+
       - name: Clone Engagement Harness
-        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
+        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness-review
 
       - name: Build Engagement Harness
         run: |
@@ -304,8 +317,21 @@ jobs:
         with:
           version: 10
 
+      - name: Verify HARNESS_PAT secret
+        env:
+          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
+        run: |
+          if [ -z "$HARNESS_PAT" ]; then
+            echo "❌ HARNESS_PAT secret is not configured."
+            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
+            echo "   as a repository secret named HARNESS_PAT."
+            echo "   Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+          echo "✓ HARNESS_PAT is set"
+
       - name: Clone Engagement Harness
-        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
@@ -372,8 +398,21 @@ jobs:
         with:
           version: 10
 
+      - name: Verify HARNESS_PAT secret
+        env:
+          HARNESS_PAT: \${{ secrets.HARNESS_PAT }}
+        run: |
+          if [ -z "$HARNESS_PAT" ]; then
+            echo "❌ HARNESS_PAT secret is not configured."
+            echo "   Add a GitHub PAT with repo:read access to abhishikthmeesala-2000/harness-review"
+            echo "   as a repository secret named HARNESS_PAT."
+            echo "   Settings → Secrets and variables → Actions → New repository secret"
+            exit 1
+          fi
+          echo "✓ HARNESS_PAT is set"
+
       - name: Clone Engagement Harness
-        run: git clone https://\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://x-access-token:\${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
