@@ -30,7 +30,7 @@ jobs:
           version: 10
 
       - name: Clone Engagement Harness
-        run: git clone https://github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
+        run: git clone https://${{ secrets.HARNESS_PAT }}@github.com/abhishikthmeesala-2000/harness-review.git /tmp/harness
 
       - name: Build
         run: |
