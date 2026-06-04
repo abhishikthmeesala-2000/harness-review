@@ -162,9 +162,8 @@ Developers react to finding comments. Reactions are collected on merge and weekl
 | 👍 | `+1` | `accepted` | Valid — will fix |
 | 👎 | `-1` | `false_positive` | Incorrect finding |
 | 🚀 | `rocket` | `fixed` | Already fixed |
-| 🎉 | `hooray` | `fixed` | Already fixed |
 | 😕 | `confused` | `dismissed` | Not actionable |
-| 👀 | `eyes` | `acknowledged` | Seen, deferred |
+
 
 When the overall false-positive rate exceeds 20%, the system names the worst-offending agent and recommends prompt tightening.
 
@@ -240,8 +239,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete field refere
 engagement-harness <command>
 
 Core
-  init [--yes|-y]              Initialize in the current repository (interactive)
-  uninit [--yes|-y]            Remove config, scaffold, and workflows
+  init                         Initialize in the current repository (interactive)
   doctor [--fix]               Validate installation, config, and environment
   review [--ci] [--base <ref>] [--head <ref>]   Run a PR review
   remediate --finding <id>     Generate a remediation plan (e.g. --finding EH-0001)
