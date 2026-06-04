@@ -149,7 +149,7 @@ export function buildProgram(): Command {
   feedback
     .command('collect')
     .description('Collect feedback from GitHub PR reaction emojis')
-    .requiredOption('--repo <owner/repo>', 'GitHub repository (owner/repo)')
+    .option('--repo <owner/repo>', 'GitHub repository (owner/repo) — auto-detected from git remote if omitted')
     .option('--pr <number>', 'specific PR number to scan', (v: string) => Number(v))
     .option('--days <number>', 'days to look back (default: 7)', (v: string) => Number(v))
     .option('--since <date>', 'ISO date or "Xdays" shorthand — alias for --days')
