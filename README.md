@@ -70,7 +70,7 @@ cd harness-review
 pnpm install && pnpm build
 
 # 2. Link the CLI globally
-cd packages/cli && pnpm link --global && cd ../..
+cd packages/cli && npm link && cd ../..
 
 # 3. Initialize a client repository
 cd /path/to/your/repo

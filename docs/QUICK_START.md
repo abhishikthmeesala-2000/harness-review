@@ -28,16 +28,8 @@ This compiles all nine packages using TypeScript project references. Build outpu
 
 ```bash
 cd packages/cli
-pnpm link --global
+npm link
 cd ../..
-```
-
-If `pnpm link --global` fails with `ERR_PNPM_NO_GLOBAL_BIN_DIR`:
-
-```bash
-pnpm setup          # adds PNPM_HOME to your shell profile
-source ~/.zshrc     # or ~/.bashrc
-pnpm link --global  # retry
 ```
 
 Alternatively, invoke the CLI directly without global linking:
