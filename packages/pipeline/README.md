@@ -8,9 +8,14 @@ Seven-stage finding processing pipeline for Engagement Harness. Transforms raw `
 
 | File | Purpose |
 |---|---|
-| `src/pipeline.ts` | `FindingPipeline` — orchestrates all 7 stages |
+| `src/pipeline.ts` | `FindingPipeline` — orchestrates all stages |
 | `src/evidence-scorer.ts` | `EvidenceScorer` — grades diff grounding |
-| `src/verifier.ts` | `Verifier` — heuristic quality checks |
+| `src/verifier.ts` | `Verifier` — heuristic quality checks (stage 3) |
+| `src/truth-verifier-agent.ts` | `TruthVerifierAgent` — LLM second-pass verifier with `claimAddressed` field |
+| `src/truth-verifier-stage.ts` | `TruthVerifierStage` — applies three safety guards (stage 3.5) |
+| `src/claim-types.ts` | `detectClaimType()` — infers claim type from title/sourceAgent/dimension |
+| `src/verifier-prompts.ts` | `getClaimTypeInstructions()` — per-claim-type accept/reject criteria |
+| `src/finding-tracker.ts` | `FindingTracker` — delta tracking: new / outstanding / resolved |
 | `src/confidence-scorer.ts` | `ConfidenceScorer` — weighted confidence + rollup |
 | `src/deduplicator.ts` | `Deduplicator` — best-finding per key |
 | `src/quality-gate.ts` | `QualityGate` — threshold filtering |
@@ -57,6 +62,7 @@ export interface RejectedEntry {
 | 1. Schema validation | Validates against `CandidateFindingSchema` | Invalid schema |
 | 2. Evidence scoring | Grades evidence grounding: strong/medium/weak/none | — |
 | 3. Verification | File in diff, evidence non-empty, fix non-generic | Verifier rejected |
+| 3.5. LLM truth verifier | Claim-type-aware second pass; three safety guards (critical bypass, unaddressed claim, high+low-confidence) | truth-verifier rejected |
 | 4. Confidence calibration | Computes `[0,1]` confidence score; upgrades to `Finding` | — |
 | 5. Deduplication | Keeps highest-confidence per `file::lineStart::dimension` | Duplicate |
 | 6. Quality gate | Filters by `confidenceThreshold` and `severityThreshold` | Below threshold |

@@ -14,10 +14,11 @@
 ## Testing
 
 - [ ] `pnpm build` passes
-- [ ] `pnpm test` passes (all Vitest tests)
+- [ ] `pnpm test` passes (all 548 Vitest tests)
 - [ ] `pnpm typecheck` passes
 - [ ] `pnpm lint` passes
 - [ ] New functionality has tests
+- [ ] Agent prompt changes: mock provider fixture updated to match new prompt format
 - [ ] `engagement-harness eval` passes (if agents or pipeline were changed)
 
 ## Checklist

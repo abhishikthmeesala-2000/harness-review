@@ -62,11 +62,22 @@ All packages are private TypeScript modules compiled with project references (`t
    All matches replaced with [REDACTED_SECRET].
    │
    ▼
-5. AgentOrchestrator.run(bundle, config)
-   Instantiates each enabled agent, resolves its provider via ModelRouter,
-   runs all agents concurrently (Promise.allSettled), collects CandidateFinding[].
-   domain-policy skips if no rule entries matched; data-architecture skips if
-   no migration/schema paths are in the diff; pr-intent-gap skips if no PR metadata.
+5. PerFileOrchestrator.execute(bundle, config)   [Pass 1]
+   For each file in the diff:
+   - Builds a single-file ContextBundle (rules shared, everything else file-scoped)
+   - Runs AgentOrchestrator.run() on that bundle — all agents run in parallel per file
+   - Tags every finding  pass: "local"
+   All files run concurrently via Promise.all.
+   This isolates each file so agents give it their full attention.
+   │
+   ▼
+5b. CrossFileReviewer.execute(bundle, pass1Findings)   [Pass 2]
+   Skipped when context.diff.length <= 1.
+   Sends all changed files together in a single prompt.
+   Instructs the model to report ONLY cross-file issues (API mismatches,
+   missing error propagation, inconsistent patterns, architectural violations).
+   Pass 1 findings are included so the model does not repeat them.
+   Tags every finding  pass: "integration".
    │
    ▼
 6. FindingPipeline.process(candidates, bundle, config) — 7 stages:
@@ -77,9 +88,20 @@ All packages are private TypeScript modules compiled with project references (`t
    │          medium (file path in evidence, diff keywords, code identifiers)
    │          weak   (fallback)
    │          none   (no evidence at all)
-   │ Stage 3: Verification — heuristic checks:
+   │ Stage 3: Verification — heuristic checks (Verifier):
    │          file exists in diff, evidence array non-empty, diff evidence
    │          grounded in actual hunk content, fix avoids generic phrases
+   │ Stage 3.5: LLM truth verifier (TruthVerifierAgent):
+   │          Only runs when a real Provider is supplied.
+   │          Detects claim type for each finding:
+   │            bug, security, missing-test, intent-gap,
+   │            architecture, performance, quality, unknown
+   │          Sends claim-type-specific evaluation instructions per finding.
+   │          Response includes  claimAddressed: boolean  field.
+   │          Three safety guards applied in TruthVerifierStage:
+   │            1. critical severity → always approved, skip LLM entirely
+   │            2. claimAddressed=false on rejection → publish anyway
+   │            3. high severity + rejection confidence < 0.7 → publish anyway
    │ Stage 4: Confidence calibration — base 0.5, then:
    │          +0.2 strong evidence, +0.1 medium, -0.2 weak, -0.4 none
    │          +0.1 verifier approved, -0.3 verifier rejected
@@ -153,12 +175,34 @@ The 7-stage processing pipeline. Contains:
 - **`FindingPipeline`** (`src/pipeline.ts`) — orchestrates all stages, returns `PipelineResult`
 - **`EvidenceScorer`** (`src/evidence-scorer.ts`) — grades diff grounding
 - **`Verifier`** (`src/verifier.ts`) — heuristic quality checks
+- **`TruthVerifierAgent`** (`src/truth-verifier-agent.ts`) — LLM second pass with `claimAddressed` field
+- **`TruthVerifierStage`** (`src/truth-verifier-stage.ts`) — applies three safety guards (critical bypass, unaddressed claim, high+low-confidence)
+- **`detectClaimType`** (`src/claim-types.ts`) — infers claim type from `title`, `sourceAgent`, `dimension`
+- **`getClaimTypeInstructions`** (`src/verifier-prompts.ts`) — per-claim-type accept/reject criteria
+- **`FindingTracker`** (`src/finding-tracker.ts`) — delta tracking: new / outstanding / resolved
 - **`ConfidenceScorer`** (`src/confidence-scorer.ts`) — weighted scoring + rollup
 - **`Deduplicator`** (`src/deduplicator.ts`) — per-key best-finding selection
 - **`QualityGate`** (`src/quality-gate.ts`) — threshold filtering
 - **`PolicyEngine`** (`src/policy-engine.ts`) — final decision
 
-Key types: `PipelineResult`, `PipelineMetrics`, `RejectedEntry`, `EvidenceLevel`
+**Fingerprint formula** (from `FindingTracker.fingerprint()`):
+```
+${finding.file}::${finding.category}::${normalizedTitle}::${finding.severity}
+```
+Line-agnostic by design — code shifts lines as it grows, but the same issue in the same file with the same title and severity is the "same" finding for re-review purposes.
+
+**Delta result structure:**
+```typescript
+interface DeltaResult {
+  newFindings: Finding[];          // never seen before on this PR
+  outstandingFindings: Finding[];  // seen before, still present
+  resolvedFindings: TrackedFinding[];  // seen before, now gone
+}
+```
+
+Persisted to `.engagement-harness/findings/known-findings.json`.
+
+Key types: `PipelineResult`, `PipelineMetrics`, `RejectedEntry`, `EvidenceLevel`, `DeltaResult`, `TrackedFinding`
 
 ### `@engagement-harness/reports`
 
@@ -199,6 +243,24 @@ Evaluation framework. Contains:
 ### `@engagement-harness/cli`
 
 Commander.js entry point. Binds all commands from `src/commands/` to the `engagement-harness` binary. See [CLI Reference in README.md](../README.md#cli-reference) for the full command list.
+
+---
+
+## Two-Pass System Deep Dive
+
+### Why attention dilution matters
+
+When all files in a large PR are sent to an agent in a single prompt, the model's attention is split. Files later in the prompt receive less scrutiny. A 10-file PR where the critical security change is file 8 gets worse analysis than a 1-file PR with the same change.
+
+**Pass 1 (PerFileOrchestrator):** Solves this by giving each file its own isolated context. The model sees exactly one changed file plus the shared rules and neighboring tests. All 9 agents run for each file, all files in parallel.
+
+**Pass 2 (CrossFileReviewer):** Handles the class of issue that is invisible in isolation. After Pass 1 completes, all files are combined into a single context for a single cross-file review. Pass 1 findings are included so the model cannot repeat them.
+
+**Single-file PRs:** Pass 2 is skipped entirely (`context.diff.length <= 1`).
+
+### Cross-file finding gate
+
+Integration findings (Pass 2) go through an additional gate in `TruthVerifierStage`: the `filesInvolved` array must have ≥ 2 entries, and if `verdict.failureType` is `not_cross_file` or `contradicted_by_evidence`, the finding is rejected. This prevents Pass 2 from re-reporting single-file issues under the `integration` pass label.
 
 ---
 

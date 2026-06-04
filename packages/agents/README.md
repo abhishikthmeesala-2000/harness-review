@@ -10,6 +10,8 @@ Nine specialized AI review agents plus the orchestrator and model router for Eng
 |---|---|
 | `src/base.ts` | `BaseAgent` abstract class — prompt execution, JSON parsing, schema validation |
 | `src/orchestrator.ts` | `AgentOrchestrator` — runs all enabled agents concurrently |
+| `src/per-file-orchestrator.ts` | `PerFileOrchestrator` — Pass 1: runs orchestrator once per changed file in parallel |
+| `src/cross-file-reviewer.ts` | `CrossFileReviewer` — Pass 2: single cross-file integration review |
 | `src/router.ts` | `ModelRouter` — maps agent IDs to provider names from config |
 | `src/prompt-utils.ts` | `renderDiffSummary`, `renderFileContext`, `renderFunctionContext`, `FINDING_SCHEMA_BLOCK` |
 | `src/reviewer.ts` | `ReviewerAgent` — correctness dimension |
@@ -39,6 +41,17 @@ export abstract class BaseAgent {
 // Orchestrator
 export class AgentOrchestrator {
   async run(bundle: ContextBundle, config: Config): Promise<CandidateFinding[]>;
+}
+
+// Two-pass orchestration
+export class PerFileOrchestrator {
+  constructor(orchestrator: AgentOrchestrator);
+  async execute(context: ContextBundle, config: Config): Promise<CandidateFinding[]>; // tags pass: "local"
+}
+
+export class CrossFileReviewer {
+  constructor(provider: Provider);
+  async execute(context: ContextBundle, pass1Findings: CandidateFinding[]): Promise<CandidateFinding[]>; // tags pass: "integration"
 }
 
 // Router

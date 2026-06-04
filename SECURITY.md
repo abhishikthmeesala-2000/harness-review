@@ -4,6 +4,8 @@
 
 | Version | Supported |
 |---|---|
+| 0.3.x | Yes |
+| 0.2.x | Yes |
 | 0.1.x | Yes |
 
 ---
@@ -58,4 +60,4 @@ Reports written to `.engagement-harness/reports/` contain finding descriptions a
 - **Never blocks CI without opt-in** — `ci.blockOnPolicy` defaults to `false`
 - **Never calls live AI providers without explicit config** — agents use `MockProvider` unless a named provider is configured in `config.models`
 
-See [SAFETY.md](SAFETY.md) for the complete list of safety guarantees and redaction implementation details.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for implementation details on secret redaction and the full data flow.
