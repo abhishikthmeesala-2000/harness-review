@@ -39,9 +39,7 @@ Engagement Harness collects developer reactions to finding comments and uses the
 | 👍 | `+1` | `accepted` | Finding is valid; developer will fix it |
 | 👎 | `-1` | `false_positive` | Finding is incorrect; should not have been raised |
 | 🚀 | `rocket` | `fixed` | Finding was already addressed |
-| 🎉 | `hooray` | `fixed` | Finding was already addressed (alias for 🚀) |
 | 😕 | `confused` | `dismissed` | Finding is technically valid but not a priority |
-| 👀 | `eyes` | `acknowledged` | Developer saw it; no action yet |
 | *(none)* | — | `ignored` | No reaction; not included in metrics |
 
 **Priority order for deduplication:** When a comment has multiple reactions, the state with the highest priority wins: `false_positive` > `accepted` > `fixed` > `dismissed` > `acknowledged` > `ignored`.
