@@ -70,7 +70,7 @@ engagement-harness init -y
 
 ## Step 3: Add an API Key
 
-All agents default to the built-in `MockProvider`, which returns deterministic canned findings with no API call. To use real AI providers, export an API key and update `config.json`.
+All agents default to the built-in `ANthropic`, which returns  findings with  API call. To use other real AI providers, export an API key and update `config.json`.
 
 **Anthropic Claude (recommended):**
 
@@ -138,6 +138,7 @@ Expected output:
 ```bash
 engagement-harness review --base main --head HEAD
 ```
+If you want to do manually. But everything is automatic, once the setup is  done. 
 
 Or compare any two refs:
 
