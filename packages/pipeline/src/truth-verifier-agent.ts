@@ -2,6 +2,9 @@ import type { CandidateFinding, ContextBundle } from '@engagement-harness/core';
 import type { Provider } from '@engagement-harness/providers';
 import { z } from 'zod';
 
+import { detectClaimType } from './claim-types.js';
+import { getClaimTypeInstructions } from './verifier-prompts.js';
+
 const TruthVerdictDecisionSchema = z.enum(['approved', 'rejected', 'downgrade', 'needs_context']);
 const TruthVerdictFailureTypeSchema = z.enum([
   'none',
@@ -22,6 +25,7 @@ const TruthVerdictSchema = z.object({
   confidence: z.number().min(0).max(1),
   reason: z.string().min(1),
   failureType: TruthVerdictFailureTypeSchema,
+  claimAddressed: z.boolean().optional().default(true),
 });
 
 const TruthVerdictsResponseSchema = z.object({
@@ -91,6 +95,21 @@ Use decision levels:
 - rejected: finding is false, speculative, or duplicate — hide it
 - needs_context: finding might be real but cannot be determined without more context — suppress from comments
 
+Claim-type-specific rejection rules:
+
+- BUG claims: only reject if you can PROVE the logic is correct. Test coverage does NOT disprove a bug.
+- SECURITY claims: only reject if you can show mitigation exists (validation, parameterization, trusted source). Tests do NOT disprove a vulnerability.
+- MISSING-TEST claims: reject if you can NAME specific test files and test cases that cover the code.
+- INTENT-GAP claims: reject only if the diff clearly implements what the PR description states.
+
+Set claimAddressed=false when your rejection reason does NOT directly address the type of claim being made.
+Examples of claimAddressed=false:
+  - Rejecting a BUG finding because "tests exist" (tests don't prove logic is correct)
+  - Rejecting a SECURITY finding because "there are unit tests" (tests don't prove no vulnerability)
+  - Rejecting a MISSING-TEST finding because "the logic looks correct" (correctness doesn't mean coverage exists)
+
+claimAddressed=false means the finding will be published regardless of your rejection decision.
+
 Return ONLY a JSON object, no markdown fences:
 {
   "verdicts": [
@@ -100,7 +119,8 @@ Return ONLY a JSON object, no markdown fences:
       "finalSeverity": "critical | high | medium | low",
       "confidence": 0.0,
       "reason": "",
-      "failureType": "none | unsupported_claim | contradicted_by_evidence | duplicate | style_only | weak_impact | not_cross_file | severity_too_high | needs_more_context"
+      "failureType": "none | unsupported_claim | contradicted_by_evidence | duplicate | style_only | weak_impact | not_cross_file | severity_too_high | needs_more_context",
+      "claimAddressed": true
     }
   ]
 }`;
@@ -140,6 +160,16 @@ function renderContextEntries(context: ContextBundle): string {
   return sections.join('\n');
 }
 
+function buildClaimTypeContext(findings: CandidateFinding[], context: ContextBundle): string {
+  const sections: string[] = [];
+  for (const f of findings) {
+    const claimType = detectClaimType(f);
+    const instructions = getClaimTypeInstructions(claimType, context.entries);
+    sections.push(`=== Finding ${f.id} (${f.title}) ===\nCLAIM TYPE: ${claimType}\n${instructions}`);
+  }
+  return sections.join('\n');
+}
+
 function buildPrompt(findings: CandidateFinding[], context: ContextBundle): string {
   const findingsSummary = findings.map((f) => ({
     id: f.id,
@@ -156,11 +186,15 @@ function buildPrompt(findings: CandidateFinding[], context: ContextBundle): stri
     whyItMatters: f.whyItMatters,
     suggestedFix: f.suggestedFix,
     falsePositiveRisk: f.falsePositiveRisk,
+    claimType: detectClaimType(f),
   }));
 
   return [
     'FINDINGS TO VERIFY',
     JSON.stringify(findingsSummary, null, 2),
+    '',
+    'CLAIM-TYPE-SPECIFIC EVALUATION RULES',
+    buildClaimTypeContext(findings, context),
     '',
     'DIFF',
     renderDiff(context),

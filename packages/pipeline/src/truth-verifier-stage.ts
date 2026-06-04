@@ -44,6 +44,28 @@ function applyVerdict(finding: CandidateFinding, verdict: TruthVerdict): Candida
     }
   }
 
+  // Override: rejection reason doesn't address the specific claim type
+  if (verdict.decision === 'rejected' && !(verdict.claimAddressed ?? true)) {
+    return {
+      ...finding,
+      verification: {
+        status: 'approved',
+        reason: 'truth-verifier: rejection reason did not address the specific claim',
+      },
+    };
+  }
+
+  // Override: high severity with low-confidence rejection — publish to avoid missing real issues
+  if (finding.severity === 'high' && verdict.decision === 'rejected' && verdict.confidence < 0.7) {
+    return {
+      ...finding,
+      verification: {
+        status: 'approved',
+        reason: `truth-verifier: high severity with low-confidence rejection (${verdict.confidence.toFixed(2)})`,
+      },
+    };
+  }
+
   switch (verdict.decision) {
     case 'approved':
       return {
@@ -96,8 +118,20 @@ export const TruthVerifierStage = {
     provider: Provider,
   ): Promise<TruthVerifierResult> {
     // Only run on findings that passed the heuristic verifier; rejected ones stay rejected.
-    const toVerify = candidates.filter((c) => c.verification.status !== 'rejected');
+    const nonRejected = candidates.filter((c) => c.verification.status !== 'rejected');
     const alreadyRejected = candidates.filter((c) => c.verification.status === 'rejected');
+
+    // Critical findings are always published — skip LLM evaluation entirely.
+    const criticalFindings = nonRejected
+      .filter((c) => c.severity === 'critical')
+      .map((c) => ({
+        ...c,
+        verification: {
+          status: 'approved' as const,
+          reason: 'critical severity: always published',
+        },
+      }));
+    const toVerify = nonRejected.filter((c) => c.severity !== 'critical');
 
     const verdicts = await TruthVerifierAgent.run(toVerify, context, provider);
     const verdictMap = new Map<string, TruthVerdict>(verdicts.map((v) => [v.findingId, v]));
@@ -111,11 +145,13 @@ export const TruthVerifierStage = {
       return applyVerdict(finding, verdict);
     });
 
-    const allCandidates = [...alreadyRejected, ...processed];
+    const allCandidates = [...alreadyRejected, ...criticalFindings, ...processed];
 
-    const approvedCount = processed.filter((c) => c.verification.status === 'approved').length;
+    const approvedCount =
+      criticalFindings.length +
+      processed.filter((c) => c.verification.status === 'approved').length;
     const truthVerifierApprovalRate =
-      toVerify.length > 0 ? approvedCount / toVerify.length : 0;
+      nonRejected.length > 0 ? approvedCount / nonRejected.length : 0;
 
     return { candidates: allCandidates, truthVerifierApprovalRate };
   },

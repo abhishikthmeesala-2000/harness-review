@@ -1,3 +1,5 @@
+export { detectClaimType } from './claim-types.js';
+export type { ClaimType } from './claim-types.js';
 export { ConfidenceScorer } from './confidence-scorer.js';
 export { Deduplicator } from './deduplicator.js';
 export { EvidenceScorer } from './evidence-scorer.js';
@@ -11,4 +13,5 @@ export { TruthVerifierAgent } from './truth-verifier-agent.js';
 export type { TruthVerdict, TruthVerdictDecision, TruthVerdictFailureType } from './truth-verifier-agent.js';
 export { TruthVerifierStage } from './truth-verifier-stage.js';
 export type { TruthVerifierResult } from './truth-verifier-stage.js';
+export { buildVerifierPrompt, getClaimTypeInstructions } from './verifier-prompts.js';
 export { Verifier } from './verifier.js';

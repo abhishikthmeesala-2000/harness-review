@@ -38,7 +38,7 @@ function makeCandidate(overrides: Partial<CandidateFinding> = {}): CandidateFind
     title: 'SQL injection',
     category: 'security',
     dimension: 'security',
-    severity: 'critical',
+    severity: 'high',
     file: 'src/api/users.ts',
     lineStart: 1,
     lineEnd: 1,
@@ -168,5 +168,82 @@ describe('TruthVerifierStage.run', () => {
     const { truthVerifierApprovalRate } = await TruthVerifierStage.run([makeCandidate()], makeBundle(), provider);
 
     expect(truthVerifierApprovalRate).toBe(1.0);
+  });
+
+  it('always publishes critical findings without calling the provider', async () => {
+    const provider = makeProvider([]); // no verdicts returned
+    const candidate = makeCandidate({ severity: 'critical' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('critical severity');
+  });
+
+  it('publishes finding when rejection reason does not address the claim (claimAddressed=false)', async () => {
+    const provider = makeProvider([
+      {
+        findingId: 'EH-0001',
+        decision: 'rejected',
+        finalSeverity: 'high',
+        confidence: 0.85,
+        reason: 'Tests exist for this function.',
+        failureType: 'unsupported_claim',
+        claimAddressed: false,
+      },
+    ]);
+    const candidate = makeCandidate({ severity: 'high', title: 'Off-by-one error in loop' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('did not address the specific claim');
+  });
+
+  it('publishes high-severity finding when rejection confidence is below 0.7', async () => {
+    const provider = makeProvider([
+      {
+        findingId: 'EH-0001',
+        decision: 'rejected',
+        finalSeverity: 'high',
+        confidence: 0.6,
+        reason: 'Looks fine to me.',
+        failureType: 'unsupported_claim',
+        claimAddressed: true,
+      },
+    ]);
+    const candidate = makeCandidate({ severity: 'high' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('high severity with low-confidence rejection');
+  });
+
+  it('rejects high-severity finding when rejection confidence is >= 0.7 and claim is addressed', async () => {
+    const provider = makeProvider([
+      {
+        findingId: 'EH-0001',
+        decision: 'rejected',
+        finalSeverity: 'high',
+        confidence: 0.75,
+        reason: 'ORM parameterization is used throughout.',
+        failureType: 'contradicted_by_evidence',
+        claimAddressed: true,
+      },
+    ]);
+    const candidate = makeCandidate({ severity: 'high' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    expect(candidates[0]!.verification.status).toBe('rejected');
+  });
+
+  it('counts critical findings in approval rate', async () => {
+    const critical = makeCandidate({ id: 'EH-0001', severity: 'critical' });
+    const nonCritical = makeCandidate({ id: 'EH-0002', severity: 'high', title: 'High severity issue' });
+    const provider = makeProvider([
+      { findingId: 'EH-0002', decision: 'rejected', finalSeverity: 'high', confidence: 0.9, reason: 'False positive.', failureType: 'unsupported_claim' },
+    ]);
+    const { truthVerifierApprovalRate } = await TruthVerifierStage.run([critical, nonCritical], makeBundle(), provider);
+
+    // critical is approved (1), non-critical is rejected (0) → 1/2 = 0.5
+    expect(truthVerifierApprovalRate).toBe(0.5);
   });
 });
