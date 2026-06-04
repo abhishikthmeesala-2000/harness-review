@@ -194,7 +194,7 @@ Feedback collection settings.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Enable the feedback collection system. |
-| `autoCollect` | `boolean` | `false` | Automatically collect reactions after each review run. |
+| `autoCollect` | `boolean` | `true` | Automatically collect reactions after each review run. |
 | `collectionSchedule` | `string` (cron) | — | Cron expression for the scheduled sweep workflow (e.g., `"0 9 * * 1"` for Mondays at 9 AM). |
 | `retentionDays` | `integer` | — | How many days of feedback entries to retain in `metrics.json`. Older entries are pruned. |
 
@@ -280,7 +280,7 @@ Run only the `security` agent with Anthropic. Useful during initial pilot to val
   "ci": {
     "blockOnPolicy": true,
     "postComments": true,
-    "artifactsOnly": false
+    "artifactsOnly": true
   },
   "alm": { "platform": "github" },
   "review": {
