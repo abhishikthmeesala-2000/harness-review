@@ -49,16 +49,17 @@ export class ReactionCollector {
 
     for (const prNum of prNumbers) {
       // Conversation (issue) comments — used for summary/fallback comments.
-      const issueComments = await this.fetchComments(
-        `${this.base}/issues/${prNum}/comments?per_page=100`,
+      const issueComments = await this.fetchAllComments(
+        `${this.base}/issues/${prNum}/comments`,
         prNum,
         'conversation',
       );
       await this.collectFromComments(issueComments, prNum, 'issues', items);
 
-      // Inline review comments — used for per-finding comments in the diff.
-      const reviewComments = await this.fetchComments(
-        `${this.base}/pulls/${prNum}/comments?per_page=100`,
+      // Inline review comments — state=all includes outdated/resolved threads so reactions
+      // left before fixes were pushed are not lost.
+      const reviewComments = await this.fetchAllComments(
+        `${this.base}/pulls/${prNum}/comments?state=all`,
         prNum,
         'review',
       );
@@ -68,13 +69,49 @@ export class ReactionCollector {
     return { collected: items, prNumbers };
   }
 
-  private async fetchComments(url: string, prNum: number, label: string): Promise<GitHubComment[]> {
-    try {
-      return await this.ghFetch<GitHubComment[]>(url);
-    } catch (err) {
-      console.warn(`  [warn] PR #${prNum}: failed to fetch ${label} comments — ${String(err)}`);
-      return [];
+  /**
+   * Fetch every comment from a paginated GitHub endpoint, deduplicating by comment ID.
+   * Pagination stops when a page returns fewer than 100 results.
+   */
+  private async fetchAllComments(
+    baseUrl: string,
+    prNum: number,
+    label: string,
+  ): Promise<GitHubComment[]> {
+    const all: GitHubComment[] = [];
+    const seen = new Set<number>();
+    let page = 1;
+
+    let hasMore = true;
+    while (hasMore) {
+      const sep = baseUrl.includes('?') ? '&' : '?';
+      const url = `${baseUrl}${sep}per_page=100&page=${page}`;
+      let batch: GitHubComment[];
+      try {
+        batch = await this.ghFetch<GitHubComment[]>(url);
+      } catch (err) {
+        console.warn(
+          `  [warn] PR #${prNum}: failed to fetch ${label} comments (page ${page}) — ${String(err)}`,
+        );
+        hasMore = false;
+        continue;
+      }
+
+      for (const comment of batch) {
+        if (!seen.has(comment.id)) {
+          seen.add(comment.id);
+          all.push(comment);
+        }
+      }
+
+      if (batch.length < 100) {
+        hasMore = false;
+      } else {
+        page++;
+      }
     }
+
+    return all;
   }
 
   /**
