@@ -1,283 +1,246 @@
 # Architecture
 
-This document explains how Engagement Harness is structured, how data flows through the system, and why key design decisions were made.
+This document describes how Engagement Harness is structured, how data flows through the system from a PR diff to a posted comment, and why key design decisions were made.
 
 ---
 
-## Package Dependency Graph
+## Package Graph
 
 ```
 cli
- ├── agents
- │    ├── core
- │    └── providers
- │         └── core
- ├── ci
- │    └── core
- ├── eval
- │    ├── agents
- │    ├── pipeline
- │    ├── providers
- │    └── reports
- ├── feedback  (no workspace dependencies)
- ├── pipeline
- │    └── core
- ├── providers
- │    └── core
- └── reports
-      ├── core
-      └── pipeline
+ ├── agents      ── core, providers
+ ├── pipeline    ── core, providers
+ ├── reports     ── core, pipeline
+ ├── feedback    (standalone)
+ ├── eval        ── core, pipeline, agents, providers, reports
+ ├── ci          ── core
+ └── core        (foundation)
+
+providers ── core
 ```
 
-All packages are private TypeScript modules compiled with project references (`tsc -b`). No package is published to npm; the CLI is consumed by cloning the repo and linking globally.
+`core` is the only package with no dependencies on other workspace packages. Everything else composes on top of it. `cli` is the integration layer that assembles all packages into user-facing commands.
+
+---
+
+## Package Responsibilities
+
+| Package | Responsibility |
+|---|---|
+| `core` | Zod schemas (`ConfigSchema`, `CandidateFindingSchema`, `FindingSchema`), `loadConfig()`, `ContextEngine`, `SecretRedactor`, ALM adapter factory |
+| `providers` | `Provider` interface, `ProviderRegistry`, `AnthropicProvider`, `OpenAIProvider`, `MockProvider` |
+| `agents` | `BaseAgent`, 9 specialist agents, `AgentOrchestrator`, `PerFileOrchestrator`, `CrossFileReviewer`, `ModelRouter` |
+| `pipeline` | `FindingPipeline` (7 stages), `EvidenceScorer`, `Verifier`, `TruthVerifierAgent`, `ConfidenceScorer`, `Deduplicator`, `QualityGate`, `PolicyEngine`, `FindingTracker`, claim-type detection |
+| `reports` | `ReportGenerator`, JSON/Markdown/HTML renderers, `ReportWriter` |
+| `feedback` | `ReactionCollector`, `FeedbackStore`, `MetricsCalculator`, `FeedbackDeduplicator` |
+| `eval` | `EvalRunner`, `EvalCase` schema, fixture loader, `FeedbackImporter` |
+| `ci` | `GitHubCommenter` (inline diff comments, summary comment upsert) |
+| `cli` | Commander.js program, all command implementations, `pricing.ts` |
 
 ---
 
 ## Full Data Flow
 
 ```
-1. User runs `engagement-harness review --base main --head HEAD`
-   │
-   ▼
-2. GitDiffParser
-   Calls simple-git to get the unified diff between base and head refs.
-   Parses hunks into FileDiff[] with per-line add/remove/context tracking.
-   │
-   ▼
-3. ContextEngine.build(diff, config, repoRoot)
-   - Filters FileDiff[] against config.context.ignoredPaths (micromatch globs)
-   - Reads full content of every changed file
-   - Finds sibling test files (*.test.ts, *.spec.ts, __tests__/ directories)
-   - Scans .engagement-harness/rules/*.md for rule files matching changed paths
-   - Extracts 1-hop imports (files imported by changed files)
-   - Extracts 1-hop importers (files that import changed files)
-   - Assembles ContextBundle: entries[], diff, repoProfile, prMetadata, runMetadata
-   - Applies budget: maxFiles (default 30) and maxTokens (default 80,000)
-   │
-   ▼
-4. SecretRedactor.redactBundle(bundle)
-   Applies regex patterns to all entry content, diff hunk lines, and PR metadata:
-   PEM private keys, AWS access keys (AKIA...), GitHub tokens (gh[psuro]_...),
-   sk- prefixed API keys, JWTs, Bearer tokens, env-style secrets (PASSWORD=, API_KEY=...).
-   All matches replaced with [REDACTED_SECRET].
-   │
-   ▼
-5. PerFileOrchestrator.execute(bundle, config)   [Pass 1]
-   For each file in the diff:
-   - Builds a single-file ContextBundle (rules shared, everything else file-scoped)
-   - Runs AgentOrchestrator.run() on that bundle — all agents run in parallel per file
-   - Tags every finding  pass: "local"
-   All files run concurrently via Promise.all.
-   This isolates each file so agents give it their full attention.
-   │
-   ▼
-5b. CrossFileReviewer.execute(bundle, pass1Findings)   [Pass 2]
-   Skipped when context.diff.length <= 1.
-   Sends all changed files together in a single prompt.
-   Instructs the model to report ONLY cross-file issues (API mismatches,
-   missing error propagation, inconsistent patterns, architectural violations).
-   Pass 1 findings are included so the model does not repeat them.
-   Tags every finding  pass: "integration".
-   │
-   ▼
-6. FindingPipeline.process(candidates, bundle, config) — 7 stages:
-   ┌─────────────────────────────────────────────────────────────────┐
-   │ Stage 1: Schema validation — drop items failing CandidateFindingSchema
-   │ Stage 2: Evidence scoring — grade each finding's grounding in the diff:
-   │          strong (verbatim ≥10-char diff line in evidence)
-   │          medium (file path in evidence, diff keywords, code identifiers)
-   │          weak   (fallback)
-   │          none   (no evidence at all)
-   │ Stage 3: Verification — heuristic checks (Verifier):
-   │          file exists in diff, evidence array non-empty, diff evidence
-   │          grounded in actual hunk content, fix avoids generic phrases
-   │ Stage 3.5: LLM truth verifier (TruthVerifierAgent):
-   │          Only runs when a real Provider is supplied.
-   │          Detects claim type for each finding:
-   │            bug, security, missing-test, intent-gap,
-   │            architecture, performance, quality, unknown
-   │          Sends claim-type-specific evaluation instructions per finding.
-   │          Response includes  claimAddressed: boolean  field.
-   │          Three safety guards applied in TruthVerifierStage:
-   │            1. critical severity → always approved, skip LLM entirely
-   │            2. claimAddressed=false on rejection → publish anyway
-   │            3. high severity + rejection confidence < 0.7 → publish anyway
-   │ Stage 4: Confidence calibration — base 0.5, then:
-   │          +0.2 strong evidence, +0.1 medium, -0.2 weak, -0.4 none
-   │          +0.1 verifier approved, -0.3 verifier rejected
-   │          +0.1 client rule reference, -0.1 high falsePositiveRisk
-   │          Clamp to [0, 1], round to 4 decimal places
-   │ Stage 5: Deduplication — key: file::lineStart::dimension
-   │          Keep highest-confidence finding per key; reject duplicates
-   │ Stage 6: Quality gate — filter by confidenceThreshold (default 0.8)
-   │          and severityThreshold (default low); optional verifier approval
-   │ Stage 7: Policy decision:
-   │          blocked_by_policy  — blockOnPolicy=true + high/critical above threshold
-   │          needs_manual_review — high/critical findings present
-   │          approved_with_warnings — medium findings present
-   │          approved              — only low findings or none
-   └─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-7. ReportGenerator.generateAll(result, runMetadata, config)
-   Produces content strings for all enabled formats (json, markdown, html).
-   ReportWriter.write() saves to .engagement-harness/reports/run-<runId>/.
-   │
-   ▼
-8. GitHubCommenter.postFindings(findings, prNumber)  [if ci.postComments=true]
-   Posts each published finding as a PR comment with embedded HTML metadata:
-   <!-- eh-metadata: findingId=EH-0001 runId=... sourceAgent=security ... -->
-   This metadata is later read by ReactionCollector to link emoji reactions
-   back to specific findings and agents.
+git diff (base..head)
+        │
+        ▼
+┌─────────────────────────────────────────────────────────────┐
+│  core: ContextEngine.build()                                  │
+│  Input:  base ref, head ref, repository path                  │
+│  Output: ContextBundle {                                      │
+│    changedFiles: ChangedFile[]  (path, hunks, lines)          │
+│    importedContext: ImportedFile[]                            │
+│    testFiles: string[]                                        │
+│    ruleFiles: RuleFile[]  (from .engagement-harness/rules/)   │
+│    prMetadata?: { title, body }                               │
+│  }                                                            │
+│  SecretRedactor strips secrets before this bundle leaves core │
+└──────────────────────────┬──────────────────────────────────┘
+                           │  ContextBundle
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  agents: AgentOrchestrator.run()                              │
+│                                                               │
+│  Pass 1 — PerFileOrchestrator                                 │
+│  ┌─────────────────────────────────────────────────────┐     │
+│  │  For each changedFile (in parallel):                 │     │
+│  │    All 9 agents × file — each agent calls provider   │     │
+│  │    Findings tagged: pass="local"                     │     │
+│  └─────────────────────────────────────────────────────┘     │
+│                                                               │
+│  Pass 2 — CrossFileReviewer (skipped if 1 file changed)      │
+│  ┌─────────────────────────────────────────────────────┐     │
+│  │  All changed files in a single prompt               │     │
+│  │  Catches API mismatches, inconsistent error handling │     │
+│  │  Findings tagged: pass="integration"                │     │
+│  └─────────────────────────────────────────────────────┘     │
+│                                                               │
+│  Output: CandidateFinding[]                                   │
+└──────────────────────────┬──────────────────────────────────┘
+                           │  CandidateFinding[]
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pipeline: FindingPipeline.run()                              │
+│                                                               │
+│  Stage 1: Schema Validation                                   │
+│    CandidateFindingSchema.safeParse() on each finding         │
+│    Malformed findings rejected here                           │
+│                                                               │
+│  Stage 2: Evidence Scoring                                    │
+│    EvidenceScorer assigns EvidenceLevel per finding           │
+│    strong: verbatim diff line ≥10 chars in evidence           │
+│    medium: file path ref, diff keywords, code idents match    │
+│    weak:   default fallback                                   │
+│    none:   no evidence present                                │
+│                                                               │
+│  Stage 3: Heuristic Verification                              │
+│    Verifier applies schema-level rules per claim type         │
+│    Does not call an AI provider                               │
+│                                                               │
+│  Stage 3.5: LLM Truth Verifier (when provider available)     │
+│    TruthVerifierStage sends finding + diff to LLM             │
+│    Uses claim-type-aware prompts (bug ≠ missing-test)         │
+│    Safety guards:                                             │
+│      - critical → always published                            │
+│      - high + confidence < 0.7 → published regardless         │
+│      - rejection with claimAddressed=false → overridden       │
+│                                                               │
+│  Stage 4: Confidence Calibration                              │
+│    ConfidenceScorer: base 0.5                                 │
+│    + strong=+0.2, medium=+0.1, weak=-0.2, none=-0.4          │
+│    + verifier approved=+0.1, rejected=-0.3                    │
+│    + client rule reference=+0.1                               │
+│    + high FP risk pattern=-0.1                                │
+│    CandidateFinding → Finding (adds confidence field)         │
+│                                                               │
+│  Stage 5: Deduplication                                       │
+│    Key: file::lineStart::dimension                            │
+│    Keeps highest-confidence finding per key                   │
+│                                                               │
+│  Stage 6: Quality Gate                                        │
+│    critical → always published                                │
+│    requireVerifierApproval + rejected → filtered              │
+│    confidence < threshold (adjusted by file type) → filtered  │
+│    severity < severityThreshold → filtered                    │
+│    File-type adjustments: config +0.1, test -0.2, frontend -0.2│
+│                                                               │
+│  Stage 7: Policy Decision                                     │
+│    PolicyEngine.decide() → PolicyDecision:                    │
+│    approved | approved_with_warnings |                        │
+│    needs_manual_review | blocked_by_policy                    │
+│                                                               │
+│  Output: PipelineResult { published, rejected, decision,      │
+│    dimensionConfidence, overallConfidence, metrics }          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │  PipelineResult
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│  pipeline: FindingTracker                                     │
+│  Fingerprint: file::category::title::severity (line-agnostic)│
+│  States: New | Outstanding | Resolved                         │
+│  Prevents duplicate inline comments on re-reviews             │
+└──────────────────────────┬──────────────────────────────────┘
+                           │
+                  ┌────────┴────────┐
+                  ▼                 ▼
+┌──────────────────┐    ┌──────────────────────────────────────┐
+│  reports:         │    │  ci: GitHubCommenter                  │
+│  ReportGenerator │    │  - Inline diff comments per finding   │
+│  JSON + MD + HTML│    │  - Hidden metadata tag in each:       │
+│  → disk          │    │    <!-- eh-metadata: findingId=...    │
+│                  │    │    runId=... sourceAgent=... -->       │
+│                  │    │  - Summary comment upserted each run  │
+│                  │    │  - Falls back to review-level comment │
+│                  │    │    if line not in visible diff hunk   │
+└──────────────────┘    └──────────────────────────────────────┘
+                                       │
+                                       ▼
+                    ┌──────────────────────────────────────────┐
+                    │  feedback: ReactionCollector              │
+                    │  Collects on merge + weekly schedule      │
+                    │  Maps reactions → FeedbackState           │
+                    │  Writes metrics.json per agent            │
+                    └──────────────────────────────────────────┘
 ```
 
 ---
 
-## Package Summaries
+## Model Router
 
-### `@engagement-harness/core`
+Each agent can be routed to a different AI provider. Resolution order:
 
-Foundation layer. Contains:
+1. `config.models[agentId]` — explicit per-agent routing (e.g., `"security": "anthropic"`)
+2. Falls back to `"mock"` if no routing is configured
 
-- **Schemas** (`src/schemas/`) — Zod definitions for `Config`, `Finding`, `CandidateFinding`, `PolicyDecision`
-- **ConfigLoader** (`src/config/loader.ts`) — reads, validates, and writes `.engagement-harness/config.json`
-- **RepoProfiler** (`src/profile/profiler.ts`) — detects language, framework, test framework, CI provider, and monorepo layout
-- **GitDiffParser** (`src/git/diff-parser.ts`) — parses unified diff into `FileDiff[]` via simple-git
-- **ContextEngine** (`src/context/engine.ts`) — builds `ContextBundle` from diff + repo content
-- **SecretRedactor** (`src/redaction/redactor.ts`) — strips secrets from bundle before agent prompts
-- **ALM interface** (`src/alm/`) — abstract `AlmAdapter` + implementations for GitHub, GitLab, Azure DevOps, Bitbucket, and none
-
-Key exported types: `Config`, `Finding`, `CandidateFinding`, `ContextBundle`, `ContextEntry`, `FileDiff`, `RepoProfile`, `AlmAdapter`
-
-### `@engagement-harness/providers`
-
-Provider abstraction layer. Contains:
-
-- **`Provider` interface** (`src/interface.ts`) — `complete(prompt, options?): Promise<CompletionResult>`
-- **`MockProvider`** (`src/mock.ts`) — deterministic responses keyed on `Dimension:` line in prompt; supports scripted mode (SHA256 hash lookup); patches fixture file/line references against the actual diff
-- **`AnthropicProvider`** (`src/anthropic.ts`) — calls `/v1/messages` with `ANTHROPIC_API_KEY`; default model `claude-sonnet-4-6`
-- **`OpenAIProvider`** (`src/openai.ts`) — calls `/v1/chat/completions` with `OPENAI_API_KEY`; default model `gpt-4o-mini`
-- **`ProviderRegistry`** (`src/registry.ts`) — register, resolve, and list providers
-
-### `@engagement-harness/agents`
-
-Nine specialized agents plus orchestration. Contains:
-
-- **`BaseAgent`** (`src/base.ts`) — abstract class; handles provider call, JSON extraction, `CandidateFindingSchema` validation, and `sourceAgent`/`modelProvider` tagging
-- **`AgentOrchestrator`** (`src/orchestrator.ts`) — runs all enabled agents concurrently via `Promise.allSettled`
-- **`ModelRouter`** (`src/router.ts`) — maps agent ID to provider string from `config.models`
-- **Nine agent classes** — each defines `id`, `dimension`, `description`, and `promptTemplate()`
-
-### `@engagement-harness/pipeline`
-
-The 7-stage processing pipeline. Contains:
-
-- **`FindingPipeline`** (`src/pipeline.ts`) — orchestrates all stages, returns `PipelineResult`
-- **`EvidenceScorer`** (`src/evidence-scorer.ts`) — grades diff grounding
-- **`Verifier`** (`src/verifier.ts`) — heuristic quality checks
-- **`TruthVerifierAgent`** (`src/truth-verifier-agent.ts`) — LLM second pass with `claimAddressed` field
-- **`TruthVerifierStage`** (`src/truth-verifier-stage.ts`) — applies three safety guards (critical bypass, unaddressed claim, high+low-confidence)
-- **`detectClaimType`** (`src/claim-types.ts`) — infers claim type from `title`, `sourceAgent`, `dimension`
-- **`getClaimTypeInstructions`** (`src/verifier-prompts.ts`) — per-claim-type accept/reject criteria
-- **`FindingTracker`** (`src/finding-tracker.ts`) — delta tracking: new / outstanding / resolved
-- **`ConfidenceScorer`** (`src/confidence-scorer.ts`) — weighted scoring + rollup
-- **`Deduplicator`** (`src/deduplicator.ts`) — per-key best-finding selection
-- **`QualityGate`** (`src/quality-gate.ts`) — threshold filtering
-- **`PolicyEngine`** (`src/policy-engine.ts`) — final decision
-
-**Fingerprint formula** (from `FindingTracker.fingerprint()`):
-```
-${finding.file}::${finding.category}::${normalizedTitle}::${finding.severity}
-```
-Line-agnostic by design — code shifts lines as it grows, but the same issue in the same file with the same title and severity is the "same" finding for re-review purposes.
-
-**Delta result structure:**
 ```typescript
-interface DeltaResult {
-  newFindings: Finding[];          // never seen before on this PR
-  outstandingFindings: Finding[];  // seen before, still present
-  resolvedFindings: TrackedFinding[];  // seen before, now gone
-}
+// ModelRouter.route(agentId, config) → Provider
+const providerName = config.models[agentId] ?? 'mock';
+return registry.get(providerName);
 ```
 
-Persisted to `.engagement-harness/findings/known-findings.json`.
-
-Key types: `PipelineResult`, `PipelineMetrics`, `RejectedEntry`, `EvidenceLevel`, `DeltaResult`, `TrackedFinding`
-
-### `@engagement-harness/reports`
-
-Three report renderers. Contains:
-
-- **`ReportGenerator`** (`src/generator.ts`) — dispatches to enabled format renderers
-- **`JsonReport`** (`src/json-report.ts`) — pretty-printed JSON with result + metadata
-- **`MarkdownReport`** (`src/markdown-report.ts`) — grouped by dimension, severity badges (🔴🟠🟡🔵), quality summary
-- **`HtmlReport`** (`src/html-report.ts`) — standalone HTML with inline CSS, HTML-entity-escaped content, collapsible dimension sections
-- **`ReportWriter`** (`src/writer.ts`) — writes to `outputDir/run-<runId>/`
-
-### `@engagement-harness/feedback`
-
-Feedback collection and metrics. Contains:
-
-- **`ReactionCollector`** (`src/reaction-collector.ts`) — polls GitHub API for reactions on EH-tagged PR comments
-- **`FeedbackStore`** (`src/feedback-store.ts`) — reads/writes `.engagement-harness/feedback/metrics.json`
-- **`MetricsCalculator`** (`src/metrics-calculator.ts`) — aggregates `FeedbackItem[]` into per-agent acceptance/FP rates
-- **`FeedbackDeduplicator`** (`src/feedback-deduplicator.ts`) — priority-based dedup (false_positive > accepted > fixed > dismissed > acknowledged > ignored)
-- **`ClaudeMemoryExporter`** (`src/claude-memory-exporter.ts`) — formats metrics for Claude memory files
-
-Key types: `FeedbackItem`, `FeedbackMetrics`, `AgentMetrics`, `FeedbackState`, `ReactionCounts`
-
-### `@engagement-harness/ci`
-
-GitHub PR comment posting. Contains:
-
-- **`GitHubCommenter`** (`src/github-commenter.ts`) — formats findings as Markdown comments with embedded `<!-- eh-metadata: ... -->` tags and posts them via GitHub Issues API
-
-### `@engagement-harness/eval`
-
-Evaluation framework. Contains:
-
-- **`EvalRunner`** (`src/runner.ts`) — runs orchestrator+pipeline against fixture repos, scores precision/recall/TP/FP/FN
-- **`EvalCaseSchema`** (`src/case-schema.ts`) — Zod schema for `case.json` files (expected findings with category, severity, fileGlob, mustMatchPhrases)
-- **`FeedbackImporter`** (`src/feedback.ts`) — imports `FeedbackEntry[]` into `metrics.json`
-
-### `@engagement-harness/cli`
-
-Commander.js entry point. Binds all commands from `src/commands/` to the `engagement-harness` binary. See [CLI Reference in README.md](../README.md#cli-reference) for the full command list.
+This lets you selectively enable real AI for high-value agents while keeping others on mock during a pilot.
 
 ---
 
-## Two-Pass System Deep Dive
+## Extended Thinking
 
-### Why attention dilution matters
+Two agents use Anthropic's extended thinking (interleaved reasoning):
 
-When all files in a large PR are sent to an agent in a single prompt, the model's attention is split. Files later in the prompt receive less scrutiny. A 10-file PR where the critical security change is file 8 gets worse analysis than a 1-file PR with the same change.
+| Agent | Thinking Budget |
+|---|---|
+| `reviewer` | 8,000 tokens |
+| `security` | 10,000 tokens |
 
-**Pass 1 (PerFileOrchestrator):** Solves this by giving each file its own isolated context. The model sees exactly one changed file plus the shared rules and neighboring tests. All 9 agents run for each file, all files in parallel.
-
-**Pass 2 (CrossFileReviewer):** Handles the class of issue that is invisible in isolation. After Pass 1 completes, all files are combined into a single context for a single cross-file review. Pass 1 findings are included so the model cannot repeat them.
-
-**Single-file PRs:** Pass 2 is skipped entirely (`context.diff.length <= 1`).
-
-### Cross-file finding gate
-
-Integration findings (Pass 2) go through an additional gate in `TruthVerifierStage`: the `filesInvolved` array must have ≥ 2 entries, and if `verdict.failureType` is `not_cross_file` or `contradicted_by_evidence`, the finding is rejected. This prevents Pass 2 from re-reporting single-file issues under the `integration` pass label.
+Extended thinking is activated via `extendedThinking` in `CompletionOptions`. The `AnthropicProvider` adds:
+- Beta header: `anthropic-beta: interleaved-thinking-2025-05-14`
+- No `temperature` field (required by the API when thinking is enabled)
+- `max_tokens` set to `budget_tokens + 4000` minimum to accommodate thinking + output
 
 ---
 
-## Key Design Decisions
+## FindingTracker and Delta Detection
 
-### Issue comments, not inline review comments
+Re-reviews do not re-post inline comments for findings that haven't changed. The tracker fingerprints each finding as:
 
-GitHub inline review comments require a specific `commit_id` + `path` + `line` combination and can only be posted during review creation. Issue comments (PR comment thread) work on any PR at any time and support emoji reactions — which are the mechanism for feedback collection. Reactions on issue comments are retrievable via a simple REST call; reactions on review comments require a different endpoint and have historically had API inconsistencies.
+```
+file :: category :: title :: severity
+```
 
-### `falsePositiveRisk` enum, not a numeric confidence score
+This is intentionally line-agnostic — shifted code from unrelated changes doesn't re-fire old findings. The summary comment shows:
 
-A numeric score (0.0–1.0) feels precise but is difficult for prompt engineers to calibrate. An agent writing "confidence: 0.73" vs "confidence: 0.74" has no semantic basis for that difference. `falsePositiveRisk: low | medium | high` gives agents a meaningful vocabulary that maps cleanly to a confidence delta (`-0.1` per high risk).
+```
+✅ Resolved (N)    — present last run, not present now
+⚠️ Outstanding (N) — present both runs
+🆕 New (N)         — not present last run, present now
+```
 
-### Mock provider as the default
+---
 
-Every agent defaults to `MockProvider` with no API key required. This eliminates the most common setup failure (missing env var) and makes the system safe to run in cost-sensitive environments. Opt-in real providers are explicit in config, with per-agent routing so teams can enable live AI incrementally.
+## ALM Adapters
 
-### Source clone, not npm install
+The `alm.platform` config field selects the ALM adapter:
 
-Engagement Harness is not yet published to npm. Clients clone the repo and build it locally. This ensures the exact same code runs in the client repo CI as in local development and avoids version skew between the published package and the actual source.
+| Value | Adapter |
+|---|---|
+| `github` | GitHub REST API (`GITHUB_TOKEN`) |
+| `gitlab` | GitLab API (`GITLAB_TOKEN`) |
+| `azure-devops` | Azure DevOps REST API |
+| `bitbucket` | Bitbucket Cloud API |
+| `none` | No ALM integration (local/CI-artifacts-only mode) |
+
+---
+
+## Design Decisions
+
+### Why two passes instead of one?
+A single pass over the entire diff dilutes agent attention on large PRs. In testing, per-file focus increased precision by catching issues that were missed when agents processed 15+ files in one prompt. The integration pass then catches cross-cutting issues that per-file focus misses.
+
+### Why claim-type-aware verification?
+The LLM truth verifier originally used generic evidence rules. This caused valid bug findings to be rejected because "unit tests cover this function" — tests do not prove logic is correct. Claim-type-aware prompts give the verifier the right lens: a bug claim is evaluated by whether the logic error is real, not by test coverage.
+
+### Why confidence scores instead of binary pass/fail?
+Binary pass/fail forces a hard threshold that either misses real issues (threshold too high) or floods with noise (threshold too low). Continuous confidence enables per-file-type adjustments: test files get a lower threshold because they have more benign patterns; config files get a higher threshold because findings there are usually critical.
+
+### Why pnpm workspaces?
+TypeScript project references (`tsc -b`) require a monorepo. pnpm workspaces provide hermetic installs and workspace protocol linking (`workspace:*`) without hoisting. The `packageManager` field in `package.json` pins the exact pnpm version used in CI.

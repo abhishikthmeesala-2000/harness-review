@@ -5,7 +5,8 @@
 **AI-powered code review that gets smarter with every pull request**
 
 [![CI](https://github.com/abhishikthmeesala-2000/harness-review/actions/workflows/ci.yml/badge.svg)](https://github.com/abhishikthmeesala-2000/harness-review/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-548%20passing-brightgreen)](#)
+[![Tests](https://img.shields.io/badge/tests-566%20passing-brightgreen)](#development)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue)](#)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue)](https://www.typescriptlang.org/)
 [![Node](https://img.shields.io/badge/Node-%E2%89%A520-green)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -13,14 +14,16 @@
 
 [Quick Start](#quick-start) •
 [How It Works](#how-it-works) •
-[Documentation](#documentation) •
-[Contributing](#contributing)
+[Agents](#nine-specialized-agents) •
+[Configuration](#configuration) •
+[CLI Reference](#cli-reference) •
+[Documentation](#documentation)
 
 </div>
 
 ---
 
-Engagement Harness is a CI-native, multi-agent pull request review platform. It runs nine specialized AI agents on every PR diff and emits a single auditable decision — `approved`, `approved_with_warnings`, `needs_manual_review`, or `blocked_by_policy` — along with structured findings in JSON, Markdown, and HTML. Reactions from developers (👍 👎 🚀 😕 👀) are automatically collected and used to improve agent accuracy over time.
+Engagement Harness is a CI-native, multi-agent pull request review platform. It runs nine specialized AI agents on every PR diff and emits a single auditable decision — `approved`, `approved_with_warnings`, `needs_manual_review`, or `blocked_by_policy` — along with structured findings in JSON, Markdown, and HTML. Reactions from developers (👍 👎 🚀 😕 👀) are automatically collected on merge and used to improve agent accuracy over time.
 
 ---
 
@@ -42,7 +45,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 engagement-harness review --base main --head HEAD
 ```
 
-See [docs/QUICK_START.md](docs/QUICK_START.md) for the full 5-minute guide including interactive `init` walkthrough, provider setup, and CI configuration.
+See [docs/QUICK_START.md](docs/QUICK_START.md) for the full 5-minute guide with CI configuration.
 
 ---
 
@@ -84,7 +87,7 @@ Pull Request Opened
 │  3. Heuristic verification                           │
 │  3.5 LLM truth verifier (claim-type-aware)           │
 │  4. Confidence calibration                           │
-│  5. Deduplication                                    │
+│  5. Deduplication (file::category::title::severity)  │
 │  6. Quality gate (confidence + severity thresholds)  │
 │  7. Policy decision                                  │
 └──────────────────────┬──────────────────────────────┘
@@ -127,51 +130,42 @@ Pull Request Opened
 | `data-architecture` | `data` | Risky migrations, NOT NULL without DEFAULT, missing FK indices, unsafe ORM raw queries |
 | `sre-observability` | `observability` | Silent error swallowing, missing structured logs, unhandled promise rejections |
 | `design-principles` | `design` | SRP violations, high coupling, abstraction leaks, misleading names |
-| `pr-intent-gap` | `intent-gap` | Gaps between PR title/description and actual diff — scope creep, TODOs |
-| `remediation` | `remediation` | Structured fix plans with effort estimates, patches, and test recommendations |
+| `pr-intent-gap` | `intent-gap` | Gaps between PR title/description and actual diff — scope creep, missing TODOs |
+| `remediation` | `remediation` | Structured BEFORE/AFTER code patches, tech-stack-aware fix plans |
 
-Each agent uses a specialist system prompt with conservative reporting rules. Agents short-circuit when they have nothing to evaluate (e.g., `domain-policy` with no rule files, `data-architecture` with no migration paths, `pr-intent-gap` with no PR metadata).
+Agents short-circuit when they have nothing meaningful to evaluate: `domain-policy` with no rule files, `data-architecture` with no migration/schema/ORM paths, `design-principles` on diffs under 20 lines, and `pr-intent-gap` with no PR metadata. No API call is made in those cases.
 
 ---
 
 ## Key Features
 
-### Two-Pass Review System
-Pass 1 gives every file focused attention. Pass 2 then reviews all files together to catch cross-cutting issues invisible in isolation — API contract mismatches, inconsistent validation patterns, architectural violations. This solves the attention dilution problem where a single large diff causes agents to miss per-file issues.
+| Feature | Description |
+|---|---|
+| **Two-pass review** | Pass 1: per-file focus. Pass 2: cross-file integration finds API mismatches and inconsistent patterns invisible in isolation. |
+| **Claim-type-aware verifier** | LLM truth verifier detects the claim type (bug, security, missing-test, intent-gap, architecture, performance, quality) and uses evidence appropriate to that type. |
+| **Confidence calibration** | Each finding gets a confidence score (0–1) based on evidence strength, verifier verdict, and severity. Quality gate filters below threshold. |
+| **Smart re-review** | Findings fingerprinted as `file::category::title::severity`. Re-reviews show ✅ Resolved / ⚠️ Outstanding / 🆕 New — no duplicate inline comments. |
+| **Automatic feedback loop** | GitHub reactions collected on merge. Per-agent acceptance and false-positive rates written to `metrics.json`. |
+| **Multi-provider routing** | Assign each agent to a different AI provider. Run `security` + `reviewer` on Anthropic; use `mock` for the rest to control pilot costs. |
+| **Zero-config dry run** | `MockProvider` built in. Run a full review on any PR with no API key and zero cost to validate the pipeline is wired correctly. |
+| **Custom domain rules** | Drop Markdown rule files into `.engagement-harness/rules/`. The `domain-policy` agent applies them literally. |
+| **Three report formats** | JSON for tooling, Markdown for humans, HTML for stakeholders — all written to `.engagement-harness/reports/`. |
+| **CI native** | GitHub Actions templates generated by `engagement-harness ci templates --platform github --write`. Supports GitHub, GitLab, Azure DevOps, Bitbucket. |
 
-### Smart Re-Review (Delta Tracking)
-Every finding is fingerprinted as `file::category::title::severity` — line-agnostic so shifted code doesn't re-fire old findings. On re-reviews, the summary comment shows:
+---
 
-```
-✅ Resolved (2)    — fixed since last run
-⚠️ Outstanding (3) — still present
-🆕 New (1)         — first seen this run
-```
+## Cost Estimates
 
-### Claim-Type-Aware Verifier
-The LLM truth verifier detects what *kind* of claim each finding makes (bug, security, missing-test, intent-gap, architecture, performance, quality) and uses evidence appropriate to that type. A bug finding is never rejected because "tests exist" — tests don't prove logic is correct. Three safety guards ensure high-signal findings are never silently dropped:
-- `critical` findings always published regardless of verifier verdict
-- `high` findings rejected with confidence < 0.7 are published anyway
-- Rejections that don't address the claim type are overridden
+All estimates use `claude-sonnet-4-6` with all 9 agents enabled.
 
-### Automatic Feedback Loop
-Developers react to finding comments. Reactions are collected on merge and weekly, aggregated per agent into `metrics.json`:
+| PR Size | Changed Files | Approximate Cost |
+|---|---|---|
+| Small | 1–3 files, ~50 lines | ~$0.05 |
+| Medium | 4–8 files, ~200 lines | ~$0.15 |
+| Large | 10–20 files, ~500 lines | ~$0.40 |
+| XL | 20+ files, ~1000 lines | ~$0.80 |
 
-| Emoji | GitHub reaction | State | Meaning |
-|---|---|---|---|
-| 👍 | `+1` | `accepted` | Valid — will fix |
-| 👎 | `-1` | `false_positive` | Incorrect finding |
-| 🚀 | `rocket` | `fixed` | Already fixed |
-| 😕 | `confused` | `dismissed` | Not actionable |
-
-
-When the overall false-positive rate exceeds 20%, the system names the worst-offending agent and recommends prompt tightening.
-
-### Multi-Provider Routing
-Route each agent to a different AI provider — assign `security` and `reviewer` to Anthropic Claude for highest accuracy, and use `mock` for everything else to control costs during a pilot.
-
-### Zero-Config Dry Run
-All agents default to the built-in `MockProvider`. Run a full review on any PR with no API key and no cost to validate the pipeline is wired up correctly.
+To reduce costs: route low-signal agents (`design-principles`, `sre-observability`) to `mock` and enable them only on targeted PRs.
 
 ---
 
@@ -179,21 +173,21 @@ All agents default to the built-in `MockProvider`. Run a full review on any PR w
 
 | Document | Contents |
 |---|---|
-| [docs/QUICK_START.md](docs/QUICK_START.md) | 5-minute setup: clone → init → API key → first review |
+| [docs/QUICK_START.md](docs/QUICK_START.md) | 5-minute setup: clone → init → API key → first review → CI |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Package graph, full data flow, design decisions |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every `config.json` field with types, defaults, and examples |
-| [docs/AGENTS.md](docs/AGENTS.md) | All 9 agents: what they check, example findings, false positive patterns |
+| [docs/AGENTS.md](docs/AGENTS.md) | All 9 agents: what they check, short-circuit conditions, example findings |
 | [docs/FEEDBACK_SYSTEM.md](docs/FEEDBACK_SYSTEM.md) | Feedback loop, reaction mapping, metrics interpretation |
 | [docs/CUSTOM_PROMPTS.md](docs/CUSTOM_PROMPTS.md) | Client-specific rules for the `domain-policy` agent |
-| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors with exact fix commands |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, adding agents, PR process |
+| [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common errors with exact symptoms and fix commands |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Development setup, adding agents/commands, PR process |
 | [SECURITY.md](SECURITY.md) | Security policy and vulnerability reporting |
 
 ---
 
 ## Configuration
 
-Configuration lives in `.engagement-harness/config.json` in the repository being reviewed. Created by `engagement-harness init`.
+Configuration lives in `.engagement-harness/config.json` in the repository being reviewed. Created automatically by `engagement-harness init`.
 
 ```json
 {
@@ -207,9 +201,11 @@ Configuration lives in `.engagement-harness/config.json` in the repository being
     "requireVerifierApproval": true
   },
   "agents": {
-    "enabled": ["reviewer", "security", "testing", "domain-policy",
-                "data-architecture", "sre-observability", "design-principles",
-                "pr-intent-gap", "remediation"]
+    "enabled": [
+      "reviewer", "security", "testing", "domain-policy",
+      "data-architecture", "sre-observability", "design-principles",
+      "pr-intent-gap", "remediation"
+    ]
   },
   "models": {
     "security": "anthropic",
@@ -238,37 +234,41 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for the complete field refere
 ```
 engagement-harness <command>
 
-Core
-  init                         Initialize in the current repository (interactive)
-  doctor [--fix]               Validate installation, config, and environment
-  review [--ci] [--base <ref>] [--head <ref>]   Run a PR review
-  remediate --finding <id>     Generate a remediation plan (e.g. --finding EH-0001)
+Setup
+  init [--yes]                     Initialize in the current repository (interactive)
+  uninit [--yes]                   Remove config, scaffold, and workflows
+  doctor [--fix]                   Validate installation, config, and environment
+
+Review
+  review [--ci] [--base <ref>] [--head <ref>]
+                                   Run a PR review
+  remediate --finding <id>         Generate a BEFORE/AFTER patch for a finding
 
 Reports
-  report latest                Print the most recent report to stdout
-  report run <id>              Print a specific run's report
-  report list                  List all run IDs with timestamps and decisions
+  report latest                    Print the most recent report to stdout
+  report run <id>                  Print a specific run report
+  report list                      List all run IDs with timestamps and decisions
 
-Configuration & Introspection
-  config validate              Validate the current config.json against the schema
-  agents list                  List registered agents with IDs and descriptions
-  models list                  Show per-agent provider routing
-  models validate              Check provider availability for each configured agent
+Introspection
+  config validate                  Validate the current config.json
+  agents list                      List registered agents with IDs and descriptions
+  models list                      Show per-agent provider routing
+  models validate                  Check provider availability for each configured agent
 
 CI Integration
-  ci templates [--platform <name>] [--context <mode>] [--write]
-                               Generate workflow templates
-                               --platform: github | gitlab | azure-devops | bitbucket
-                               --context:  client | source | auto
+  ci templates [--platform <name>] [--context <mode>] [--write] [--no-print]
+                                   Generate CI workflow templates
+                                   --platform: github | gitlab | azure-devops | bitbucket
+                                   --context:  client | source | auto
 
 Feedback
-  feedback collect --repo <owner/repo> [--pr <n>] [--days <n>]
+  feedback collect [--repo <owner/repo>] [--pr <n>] [--days <n>] [--since <ISO>]
   feedback import <file>
   feedback report [--format text|json]
   feedback pilot-report [--days <n>]
 
 Evaluation
-  eval                         Run the eval suite against fixture cases
+  eval                             Run the eval suite against fixture cases
 ```
 
 ---
@@ -278,23 +278,32 @@ Evaluation
 ```
 engagement-harness/
 ├── packages/
-│   ├── core/        Schemas (Zod), config loader, ContextEngine, SecretRedactor, ALM adapter
+│   ├── core/        Zod schemas, config loader, ContextEngine, SecretRedactor, ALM adapters
 │   ├── providers/   MockProvider, AnthropicProvider, OpenAIProvider, ProviderRegistry
-│   ├── agents/      BaseAgent, 9 specialist agents, AgentOrchestrator, PerFileOrchestrator,
-│   │                CrossFileReviewer, ModelRouter
-│   ├── pipeline/    FindingPipeline (7 stages), EvidenceScorer, Verifier, TruthVerifierAgent,
-│   │                ConfidenceScorer, Deduplicator, QualityGate, PolicyEngine, FindingTracker,
-│   │                claim-types, verifier-prompts
+│   ├── agents/      BaseAgent, 9 specialist agents, AgentOrchestrator, ModelRouter
+│   ├── pipeline/    FindingPipeline (7 stages), EvidenceScorer, TruthVerifierAgent,
+│   │                ConfidenceScorer, Deduplicator, QualityGate, PolicyEngine, FindingTracker
 │   ├── reports/     ReportGenerator, JSON/Markdown/HTML renderers, ReportWriter
 │   ├── feedback/    ReactionCollector, FeedbackStore, MetricsCalculator, FeedbackDeduplicator
-│   ├── ci/          GitHubCommenter (inline + summary comments with reaction metadata)
-│   ├── eval/        EvalRunner, case schema, FeedbackImporter
-│   └── cli/         Commander.js entry point, all command implementations
+│   ├── eval/        EvalRunner, EvalCase schema, FeedbackImporter
+│   ├── ci/          GitHubCommenter (inline diff + summary comments with reaction metadata)
+│   └── cli/         Commander.js entry point, all 13 command groups
 ├── .github/
 │   └── workflows/   ci.yml, engagement-harness.yml, feedback-on-merge.yml, collect-feedback.yml
 └── docs/            ARCHITECTURE, QUICK_START, CONFIGURATION, AGENTS, FEEDBACK_SYSTEM,
                      CUSTOM_PROMPTS, TROUBLESHOOTING
 ```
+
+Package READMEs:
+[core](packages/core/README.md) •
+[providers](packages/providers/README.md) •
+[agents](packages/agents/README.md) •
+[pipeline](packages/pipeline/README.md) •
+[reports](packages/reports/README.md) •
+[feedback](packages/feedback/README.md) •
+[eval](packages/eval/README.md) •
+[ci](packages/ci/README.md) •
+[cli](packages/cli/README.md)
 
 ---
 
@@ -309,13 +318,13 @@ engagement-harness/
 ```bash
 pnpm install    # install all workspace dependencies
 pnpm build      # compile all packages (TypeScript project references)
-pnpm test       # run 548 Vitest tests across 58 test files
+pnpm test       # run 566 Vitest tests across 58 test files
 pnpm typecheck  # type-check without emitting
 pnpm lint       # ESLint all package sources
 pnpm format     # Prettier all package sources
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a new agent or CLI command.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to add a new agent, pipeline stage, or CLI command.
 
 ---
 

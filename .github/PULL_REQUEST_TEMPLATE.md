@@ -1,31 +1,37 @@
 ## Summary
 
-<!-- Describe what this PR does and why -->
+<!-- What does this PR do and why? Focus on the motivation, not just the mechanism. -->
 
 ## Changes
 
-- [ ] New feature
-- [ ] Bug fix
-- [ ] Refactor
-- [ ] Documentation
-- [ ] Tests
-- [ ] CI / infrastructure
+<!-- List the key changes made. Be specific about what was added, removed, or modified. -->
 
-## Testing
+## Which Packages Changed?
 
-- [ ] `pnpm build` passes
-- [ ] `pnpm test` passes (all 548 Vitest tests)
-- [ ] `pnpm typecheck` passes
-- [ ] `pnpm lint` passes
-- [ ] New functionality has tests
-- [ ] Agent prompt changes: mock provider fixture updated to match new prompt format
-- [ ] `engagement-harness eval` passes (if agents or pipeline were changed)
+- [ ] `core`
+- [ ] `agents`
+- [ ] `pipeline`
+- [ ] `providers`
+- [ ] `reports`
+- [ ] `feedback`
+- [ ] `eval`
+- [ ] `ci`
+- [ ] `cli`
+- [ ] `.github/workflows`
+- [ ] `docs`
+
+## How to Test
+
+<!-- Steps to reproduce or verify the change works correctly:
+     1. 
+     2. 
+     3. -->
 
 ## Checklist
 
-- [ ] No `any` types introduced
-- [ ] No placeholder comments (`TODO`, `FIXME`, `UPDATE THIS`)
-- [ ] `CHANGELOG.md` updated under `[Unreleased]`
-- [ ] New CLI commands added to `README.md` CLI Reference section
-- [ ] New config fields added to `docs/CONFIGURATION.md`
-- [ ] New agents added to `docs/AGENTS.md`
+- [ ] Tests added or updated (`pnpm test` passes)
+- [ ] TypeScript compiles cleanly (`pnpm typecheck`)
+- [ ] Lint passes (`pnpm lint`)
+- [ ] Docs updated if the public API or config schema changed
+- [ ] No placeholder TODO comments left in the code
+- [ ] `engagement-harness doctor` passes on a test repository (for CLI changes)

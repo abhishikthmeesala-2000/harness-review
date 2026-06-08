@@ -1,62 +1,99 @@
 # Changelog
 
-All notable changes are documented here. Grouped by feature area, built from the actual git history.
+All notable changes to Engagement Harness are documented here.
 
 ---
 
-## [0.3.0] — 2026-06
+## [Unreleased]
 
-### Added
-- **Systematic verifier tuning with claim-type-aware verification** (`feat(pipeline)`): `detectClaimType()` in `claim-types.ts` infers one of eight claim types (bug, security, missing-test, intent-gap, architecture, performance, quality, unknown) from a finding's `title`, `sourceAgent`, and `dimension`. `verifier-prompts.ts` provides per-claim-type accept/reject criteria, ensuring bug findings are never rejected by pointing at test coverage and security findings are never dismissed because tests exist.
-- **`TruthVerifierStage` safety guards**: Three overrides — critical findings bypass the LLM entirely (always approved), rejections with `claimAddressed=false` are published regardless of verdict, high-severity findings rejected with confidence < 0.7 are published to avoid missing real issues.
-- **`claimAddressed` field in truth-verifier verdicts**: The LLM truth verifier now returns a boolean indicating whether its rejection reason directly addresses the type of claim being made.
-- **Dynamic confidence thresholds and severity overrides in quality gate** (`feat(pipeline)`): Quality gate supports per-dimension confidence overrides and per-severity publishing rules.
-
-### Fixed
-- `pnpm link --global` replaced with `npm link` — pnpm v11 removed the no-argument form.
-- `pnpm/action-setup` version conflict: removed explicit `version: 10` from `collect-feedback.yml` and `feedback-on-merge.yml`.
-- CI clone: `feedback-on-merge.yml` and `collect-feedback.yml` now use bare HTTPS clone (repo is public); removed `HARNESS_PAT` requirement.
+No unreleased changes.
 
 ---
 
-## [0.2.0] — 2026-05
+## [0.1.0] — Initial Release
 
-### Added
-- **LLM truth verifier as a second verification pass** (`feat(pipeline)`): `TruthVerifierAgent` sends all heuristically-approved findings to an LLM for a second opinion. Verdicts include `approved`, `downgrade`, `rejected`, `needs_context`. Hard gates enforce minimum confidence (0.75) and cross-file validity.
-- **Quality gates in CI before AI review** (`feat(ci)`): CI template validates diff size before running agents.
-- **Severity rubric** (`feat(agents)`): `SEVERITY_CRITERIA_BLOCK` with concrete ✅/❌ code examples added to all agent prompts.
-- **`CONSERVATIVE_FINDING_BLOCK`**: Shared prompt block biasing all agents toward silence unless the issue is directly visible and confirmed.
-- **Specialist system prompts** (`feat(agents)`): Expert persona in `systemPrompt()` for every agent. Extended thinking enabled for `security` (10,000 tokens) and `reviewer` (8,000 tokens) on Anthropic Opus/Sonnet models.
-- **False positive suppression patterns**: Explicit `FALSE POSITIVE PATTERNS — DO NOT REPORT` sections in all agent prompts.
-- **Per-file orchestrator and two-pass review** (`feat(agents)`): `PerFileOrchestrator` for Pass 1 (per-file isolation), `CrossFileReviewer` for Pass 2 (cross-file integration issues).
-- **Structured remediation patches** (`feat(agents)`): `RemediationAgent` produces `codeReplacements[]` with file/lineStart/lineEnd/replacement in addition to unified diff patches.
-- **`autoCollect: true`** default for feedback section.
+### Features
 
-### Fixed
-- Inline PR comments posted on diff-visible lines (no longer always falling back to conversation comments).
-- Summary comment upserted on re-runs instead of posting a new comment each time.
-- Extended thinking: `anthropic-beta` header added; temperature forced to 1; max_tokens 400 errors resolved.
-- JSON parse failures from providers wrapping responses in markdown fences.
-- HTTP 400 errors from hardcoded extended thinking on unsupported models.
-- `pnpm/action-setup` explicit version pin removed from CI.
+**Verifier**
+- `feat(verifier)` — 10 systematic improvements to reduce false positives and false negatives, including claim-type-aware evidence rules and safety guards that prevent high-signal findings from being silently dropped
+
+**Remediation**
+- `feat(remediation)` — BEFORE/AFTER structured code patches, `detectTechStack()` for language/framework/ORM-aware fixes, and `remediate --finding <id>` CLI subcommand
+
+**Pipeline**
+- `feat(pipeline)` — LLM truth verifier as a second verification pass; claim-type-aware prompts prevent cross-type evidence misuse
+- `feat(pipeline)` — Systematic verifier tuning with claim-type-aware verification rules per finding category
+- `feat(pipeline)` — Dynamic confidence thresholds and severity overrides in the quality gate; file-type adjustments (config, test, frontend, backend)
+
+**Agents**
+- `feat(agents)` — 9 specialist agents with expert personas and extended thinking (reviewer: 8000 tokens, security: 10000 tokens)
+- `feat(agents)` — `CONSERVATIVE_FINDING_BLOCK` and false-positive suppression rules embedded in agent system prompts
+- `feat(agents)` — Structured BEFORE/AFTER remediation patches generated alongside findings
+
+**CI**
+- `feat(ci)` — Quality gates before AI review: checks diff size, file count, and commit message format
+- `feat(ci)` — Severity rubric enforced as a pre-review gate
+- `feat(ci)` — Inline PR comments posted on diff-visible lines; falls back to review-level comments when line is not in the visible hunk
+
+**Config**
+- `feat(config)` — `feedback.autoCollect` enabled by default in generated configs
+
+**CLI**
+- `feat(cli)` — Auto-detect repository from git remote in `feedback collect`; no `--repo` flag needed inside a git repository
+
+**Reviews**
+- `feat` — Two-pass review as the default CI behavior: per-file pass followed by cross-file integration pass
+- `feat` — Real Anthropic and OpenAI provider integrations with streaming and extended thinking support
+
+**Other**
+- `feat` — Feedback collection system with GitHub reaction parsing, deduplication, metrics aggregation, and pilot-report generation
+- `feat` — 9 specialist agents, eval runner, ALM adapters (GitHub, GitLab, Azure DevOps, Bitbucket), and CI templates for all four platforms
+- `feat` — Reports package: JSON, Markdown, and HTML output formats written to `.engagement-harness/reports/`
+- `feat` — 7-stage finding pipeline: schema validation, evidence scoring, heuristic verification, LLM truth verifier, confidence calibration, deduplication, quality gate + policy decision
+- `feat` — Provider interface, agent orchestrator, and model router with per-agent provider routing
+- `feat` — ContextEngine, diff parser, and secret redaction
+- `feat` — Monorepo scaffold with 9 workspace packages and core Zod schemas
+
+### Fixes
+
+**CI**
+- `fix(ci)` — Pin pnpm to version 10 in feedback collection workflows
+- `fix(ci)` — Remove explicit pnpm version from `action-setup` — `packageManager` field in `package.json` handles it
+- `fix(ci)` — Revert `packageManager` to `pnpm@10.33.2` — pnpm v11 requires Node 22; CI runs Node 20
+- `fix(ci)` — Remove `HARNESS_PAT` requirement — repository is public, bare HTTPS clone works without credentials
+- `fix(ci)` — Correct clone auth format; add preflight secret check before clone
+- `fix(ci)` — Authenticate git clone with token to fix non-interactive CI failures
+- `fix(ci)` — Post inline PR comments on diff-visible lines instead of always falling back to review-level
+- `fix(ci)` — Upsert summary comment on re-reviews instead of posting a new comment each run
+- `fix(ci)` — Summary comment shows current PR status only, not cumulative run history
+- `fix(ci)` — Remove explicit pnpm version to resolve conflict with `packageManager` in `package.json`
+- `fix(ci)` — Bake quality gates into the generated source-repo CI template
+- `fix(ci)` — Pin workflow action versions for reproducibility
+
+**Providers**
+- `fix(providers)` — Add `anthropic-beta: interleaved-thinking-2025-05-14` header; drop temperature for extended thinking requests
+- `fix(providers)` — Update tests to expect temperature omitted when extended thinking is enabled
+
+**Agents**
+- `fix(agents)` — Resolve JSON parse failures and HTTP 400 `max_tokens` errors for extended thinking; ensure `max_tokens >= budget_tokens + margin`
+- `fix(agents)` — Address review findings on specialist personas: tighten system prompt conservatism
+
+**Feedback**
+- `fix(feedback)` — Paginate review comments; capture outdated/resolved threads via `state=all`; fix lint errors
+
+**CLI**
+- `fix(cli)` — Replace `pnpm link --global` with `npm link` for pnpm v11 compatibility
+- `fix(cli,ci)` — Remove unused imports and pin workflow action versions
+
+**Other**
+- `fix` — Resolve HTTP 400 errors and hardcoded extended thinking configuration bugs
+- `fix(repo)` — Add `.claire/` to `.gitignore`
+
+### Documentation
+
+- `docs` — Production-grade documentation overhaul: README, CONTRIBUTING, CHANGELOG, SECURITY, ARCHITECTURE, QUICK_START, CONFIGURATION, AGENTS, FEEDBACK_SYSTEM, CUSTOM_PROMPTS, TROUBLESHOOTING, all 9 package READMEs, GitHub issue templates and PR template
 
 ---
 
-## [0.1.0] — 2026-05 — Initial Release
-
-### Added
-- **Nine specialized AI agents**: `reviewer`, `security`, `testing`, `domain-policy`, `data-architecture`, `sre-observability`, `design-principles`, `pr-intent-gap`, `remediation`
-- **`AgentOrchestrator`**: runs all enabled agents concurrently via `Promise.allSettled`; per-agent provider routing via `ModelRouter`
-- **`FindingPipeline`**: 7 stages — schema validation, evidence scoring, verification, confidence calibration, deduplication, quality gate, policy decision
-- **`FindingTracker`**: delta tracking (new / outstanding / resolved) with line-agnostic fingerprinting (`file::category::title::severity`)
-- **`ContextEngine`**: builds `ContextBundle` — changed files, 1-hop imports, test sibling files, client rule files, budget at `maxFiles`/`maxTokens`
-- **`SecretRedactor`**: strips PEM keys, AWS tokens, GitHub tokens, `sk-`-prefixed API keys, JWTs, Bearer tokens, env-style secrets
-- **Three providers**: `MockProvider`, `AnthropicProvider`, `OpenAIProvider`
-- **Three report formats**: JSON, Markdown, HTML
-- **`ReactionCollector`**: polls GitHub API for emoji reactions on `<!-- eh-metadata: ... -->` tagged comments
-- **`MetricsCalculator`**: per-agent acceptance and false-positive rates; FP alert at 20% threshold
-- **CLI commands**: `init`, `uninit`, `doctor`, `review`, `report`, `config`, `agents`, `models`, `ci`, `eval`, `feedback`, `remediate`
-- **GitHub Actions templates**: `engagement-harness.yml`, `feedback-on-merge.yml`, `collect-feedback.yml`
-- **ALM adapters**: GitHub, GitLab, Azure DevOps, Bitbucket, none
-- **`EvalRunner`**: fixture-based evaluation with precision/recall/TP/FP/FN scoring
-- **World-class `init`** experience: `doctor` and `config-validate` commands; `init -y` for non-interactive CI
+[Unreleased]: https://github.com/abhishikthmeesala-2000/harness-review/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/abhishikthmeesala-2000/harness-review/releases/tag/v0.1.0

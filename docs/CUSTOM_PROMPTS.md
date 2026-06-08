@@ -1,189 +1,191 @@
 # Custom Prompts and Client Rules
 
-This document describes two ways to customize Engagement Harness for a specific client: adding client-specific rules enforced by the `domain-policy` agent, and understanding how the base agent prompts work.
+This document describes how to add client-specific rules enforced by the `domain-policy` agent and how to understand the base agent system prompts.
 
 ---
 
-## Approach 1: Client Rule Files (Recommended)
+## Domain Rules (Client-Specific)
 
-The simplest customization is to drop Markdown rule files into `.engagement-harness/rules/`. The `domain-policy` agent loads all rule files whose glob patterns match changed paths in the diff and enforces them.
+The `domain-policy` agent enforces rules specific to the client's engineering standards. Rules are written as Markdown files and placed in `.engagement-harness/rules/`. The agent applies each rule literally — it does not infer intent beyond the written rule.
 
-### How It Works
+### Rule File Location
 
-1. Create `.engagement-harness/rules/<rulename>.md` in the client repository
-2. Add optional frontmatter specifying which files the rule applies to
-3. Write the rule body in plain Markdown — the agent reads the full content as instructions
-4. The `domain-policy` agent loads rule files, groups them by matched paths, and sends them to the provider with the diff
+```
+your-repo/
+└── .engagement-harness/
+    └── rules/
+        ├── api-conventions.md
+        ├── security-requirements.md
+        ├── data-access-patterns.md
+        └── naming-standards.md
+```
 
-If no rule files match any changed path, the `domain-policy` agent skips the provider call entirely (no cost).
+Any `.md` file in this directory is loaded and injected into the `domain-policy` agent's system prompt when it runs. You can have as many rule files as needed.
 
-### Rule File Format
+### When the Agent Short-Circuits
+
+If no rule files exist in `.engagement-harness/rules/`, the `domain-policy` agent returns `null` from `buildPrompt()` and **no API call is made**. This means:
+- Zero cost for clients with no custom rules
+- No spurious findings from an agent with no instructions
+
+### Writing Effective Rules
+
+**Be prescriptive, not descriptive.** Write rules as requirements, not observations.
 
 ```markdown
----
-glob: "src/payments/**"
----
+# Bad (describes what you observe)
+Functions that call the database are usually in the repository layer.
 
-# Payment Processing Rules
-
-All payment mutations must emit an audit event via `auditLogger.record()` within the
-same transaction. Do not flag read-only queries.
-
-Example compliant pattern:
-```
-await db.transaction(async (trx) => {
-  await trx('payments').insert(payment);
-  await auditLogger.record({ type: 'PAYMENT_CREATED', paymentId: payment.id }, trx);
-});
-```
+# Good (prescribes what must be true)
+All database calls MUST be in files under src/repositories/. Direct database access
+from controllers, services, or route handlers is not allowed.
 ```
 
-### Frontmatter Fields
-
-| Field | Description |
-|---|---|
-| `glob` | A single micromatch glob pattern. The rule is only injected when a changed file matches. |
-| `globs` | An array of micromatch patterns. The rule is injected if any changed file matches any pattern. |
-
-If neither `glob` nor `globs` is specified, the rule applies to all changed files.
-
-### Multiple Rules
-
-You can have as many rule files as needed. Each becomes a separate block in the `domain-policy` agent's prompt:
-
-```
-.engagement-harness/rules/
-├── payments.md          # globs: ["src/payments/**", "src/billing/**"]
-├── api-contracts.md     # globs: ["src/api/**", "src/routes/**"]
-├── logging-standards.md # (no glob — applies everywhere)
-└── database.md          # globs: ["src/db/**", "migrations/**"]
-```
-
-### Example: Full Rule File
+**Include examples when the rule is ambiguous.**
 
 ```markdown
----
-globs:
-  - "src/api/**"
-  - "src/routes/**"
----
+# Required response envelope
+All API endpoints MUST return responses in one of these two shapes:
+- Success: `{ "data": <payload>, "error": null }`
+- Failure: `{ "data": null, "error": "<message string>" }`
 
-# API Contract Rules
-
-## Breaking Change Policy
-
-All routes must be versioned (`/v1/`, `/v2/`, etc.) before breaking changes.
-Adding required fields to request bodies is a breaking change.
-Removing or renaming response fields is a breaking change.
-
-Flag any change that:
-- Adds a required field to an existing endpoint's request body
-- Removes or renames a field from an existing endpoint's response
-- Changes an existing route path without adding a versioned alias
-
-Do NOT flag:
-- Adding optional fields to request bodies
-- Adding new fields to responses
-- Adding entirely new routes
-
-## Error Response Format
-
-All error responses must use the standard envelope:
+Never return a raw error object, a stack trace, or a bare array as the top-level response.
 ```
+
+**Scope rules to paths when applicable.**
+
+```markdown
+# Admin authorization
+Every route handler in src/api/admin/ MUST include the following authorization check
+before any database access:
+
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ data: null, error: 'Forbidden' });
+  }
+```
+
+### Rule File Examples
+
+#### `api-conventions.md`
+
+```markdown
+# API Conventions
+
+- All REST endpoints MUST return responses in the shape `{ data: T, error: null }`
+  or `{ data: null, error: string }`.
+- Never return raw Error objects, stack traces, or undefined as the top-level response.
+- All endpoints under /api/v1/admin/ MUST check req.user.role === 'admin' before processing.
+- HTTP 500 responses MUST NOT include error.stack or error.message from internal errors.
+- Pagination MUST use cursor-based pagination (no offset). The response shape is:
+  `{ data: T[], cursor: string | null, hasMore: boolean }`.
+```
+
+#### `security-requirements.md`
+
+```markdown
+# Security Requirements
+
+- All user-supplied input used in database queries MUST use parameterized queries.
+  Direct string interpolation in SQL is never acceptable.
+- Passwords and secrets MUST NOT be logged, even at debug level.
+- File upload endpoints MUST validate MIME type from file content (not filename extension)
+  and limit file size to 10MB.
+- JWT tokens MUST be validated with the shared validation middleware in
+  src/middleware/validateToken.ts. Do not inline JWT validation logic.
+```
+
+#### `data-access-patterns.md`
+
+```markdown
+# Data Access Patterns
+
+- The Prisma client MUST only be instantiated in src/db/client.ts. Do not create new
+  PrismaClient instances in other files.
+- Raw SQL queries using prisma.$queryRaw MUST use Prisma.sql template literals for
+  parameter binding. String interpolation with $queryRawUnsafe is not allowed.
+- Transactions MUST be used when two or more related records are created or updated
+  together. Do not perform multi-table writes outside a transaction.
+```
+
+#### `naming-standards.md`
+
+```markdown
+# Naming Standards
+
+- React component files MUST use PascalCase (UserProfile.tsx, not user-profile.tsx).
+- Database migration files MUST follow the pattern: YYYYMMDD_description_snake_case.sql.
+- Environment variable names MUST be SCREAMING_SNAKE_CASE and documented in .env.example.
+- Test files MUST be co-located with the source file they test and named <source>.test.ts.
+- Do not use abbreviations in function or variable names except for well-known ones
+  (id, url, api, db).
+```
+
+---
+
+## Understanding Base Agent Prompts
+
+Each agent has a specialist system prompt in `packages/agents/src/<agent-name>.ts`. You cannot edit these prompts through configuration — they are part of the codebase. To customize them, fork the repository and modify the source.
+
+Key elements in every agent prompt:
+
+### Specialist Persona
+
+Each agent opens with a persona statement that establishes expertise:
+
+```
+You are a senior application security engineer with 15 years of experience...
+You are a staff-level software architect who cares deeply about maintainability...
+```
+
+### Conservative Finding Block
+
+Every agent includes a block of rules that reduce false positives:
+
+- Report only findings with direct evidence in the diff
+- Do not flag issues that are already handled in the diff
+- Prefer false negatives over false positives
+- One finding per root cause — do not duplicate
+- Do not speculate about code not shown
+
+### Output Format Constraint
+
+All agents are instructed to return a JSON array of findings in a specific schema. The `BaseAgent.extractJsonArray()` method handles markdown fences and surrounding prose.
+
+---
+
+## Adjusting Thresholds Without Editing Prompts
+
+If an agent produces too many false positives, use configuration adjustments before modifying prompts:
+
+**Lower confidence requirements:**
+```json
 {
-  "error": {
-    "code": "SNAKE_CASE_CODE",
-    "message": "Human-readable description",
-    "requestId": "<uuid>"
+  "review": {
+    "confidenceThreshold": 0.9
   }
 }
 ```
 
-Flag any new error response that does not include all three fields.
-```
-
----
-
-## Approach 2: Understanding the Built-in Agent Prompts
-
-If rule files are not expressive enough, you can read the agent prompt templates directly in `packages/agents/src/<agent-id>.ts`. Each agent's `promptTemplate(context: ContextBundle): string` method builds the full prompt string.
-
-The prompts follow a consistent structure:
-
-```
-You are the <AgentName> agent for the Engagement Harness.
-Dimension: <dimension>
-
-ROLE
-<conservative instructions — only flag high-confidence issues>
-
-WHAT TO CHECK
-<numbered list of patterns with mitigating factors and examples>
-
-OUTPUT FORMAT
-<JSON schema block>
-
-CONTEXT
-<rendered diff, file content, test files, rule files>
-```
-
-### Prompt Rendering Utilities
-
-The agent prompts use three utilities from `packages/agents/src/prompt-utils.ts`:
-
-| Function | What it renders |
-|---|---|
-| `renderDiffSummary(context)` | The git diff for all changed files in the ContextBundle |
-| `renderFileContext(context)` | Full content of changed files, imported files, and test files |
-| `renderFunctionContext(context)` | Function/class signatures extracted from context entries |
-| `FINDING_SCHEMA_BLOCK` | The JSON output schema all agents include at the end of their prompt |
-
-### Modifying Agent Prompts Directly
-
-You can modify prompt templates in `packages/agents/src/*.ts` and rebuild to change agent behavior for a specific deployment. This is appropriate when:
-
-- You want to add company-specific context that applies across all PRs (e.g., framework idioms)
-- You want to suppress a specific pattern the base agent checks
-- You want to add a new check type beyond what rule files can express
-
-After modifying a prompt, rebuild the package:
-
-```bash
-pnpm build
-```
-
-Then run `engagement-harness eval` to verify the change does not degrade existing eval cases.
-
----
-
-## Testing Your Rules
-
-The `domain-policy` agent's behavior can be tested with a fixture-based eval case. Create a case under `packages/eval/src/cases/` with a `diff.patch` that violates your rule:
-
+**Disable a noisy agent entirely:**
 ```json
 {
-  "name": "payment-missing-audit-log",
-  "description": "Payment mutation without auditLogger.record() call",
-  "fixtureRepoPath": ".",
-  "baseRef": "HEAD~1",
-  "headRef": "HEAD",
-  "prTitle": "Add refund endpoint",
-  "expectedFindings": [
-    {
-      "category": "domain-policy",
-      "severity": "high",
-      "fileGlob": "src/payments/**",
-      "mustMatchPhrases": ["audit"]
-    }
-  ],
-  "expectedDecision": "needs_manual_review"
+  "agents": {
+    "enabled": [
+      "reviewer", "security", "testing", "data-architecture",
+      "sre-observability", "pr-intent-gap", "remediation"
+    ]
+  }
 }
 ```
 
-Run the eval suite:
+**Add domain rules that explicitly exclude patterns:**
+```markdown
+# False Positive Suppressions
 
-```bash
-engagement-harness eval
+- Do NOT flag the pattern `throw new AppError(...)` as missing error handling.
+  AppError is our base error class and is always caught at the middleware layer.
+- Do NOT flag console.log calls in files under src/scripts/.
+  Scripts are not server-side code and do not require structured logging.
 ```
 
-A passing case confirms the `domain-policy` agent correctly catches the violation. An unexpected false-positive case (no matching finding when one was expected) indicates the rule wording needs refinement.
+The `domain-policy` agent will report violations of these rules, and because it runs after the other agents, its output can serve as a suppression layer when written carefully.

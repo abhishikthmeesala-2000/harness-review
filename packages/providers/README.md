@@ -1,121 +1,168 @@
 # @engagement-harness/providers
 
-Provider abstraction for Engagement Harness. Defines the `Provider` interface and ships three implementations: `MockProvider`, `AnthropicProvider`, and `OpenAIProvider`.
+Provider abstraction for Engagement Harness. Defines the `Provider` interface and ships three implementations: `MockProvider`, `AnthropicProvider`, and `OpenAIProvider`. Includes a `ProviderRegistry` for name-based lookup.
 
 ---
 
-## Key Modules
+## Installation
 
-| File | Purpose |
-|---|---|
-| `src/interface.ts` | `Provider` interface, `CompletionOptions`, `CompletionResult`, error classes |
-| `src/mock.ts` | `MockProvider` — deterministic or scripted responses, no API key required |
-| `src/anthropic.ts` | `AnthropicProvider` — calls Anthropic `/v1/messages` |
-| `src/openai.ts` | `OpenAIProvider` — calls OpenAI `/v1/chat/completions` |
-| `src/registry.ts` | `ProviderRegistry` — register, resolve, and list providers |
+```bash
+pnpm add @engagement-harness/providers
+```
 
 ---
 
-## Key Exported Types and Classes
+## Provider Interface
 
 ```typescript
-// Provider interface
-export interface Provider {
+interface Provider {
   readonly name: string;
+  readonly model?: string;
   complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult>;
 }
 
-export interface CompletionOptions {
+interface CompletionOptions {
   maxTokens?: number;
   temperature?: number;
+  system?: string;           // system prompt in a dedicated role
+  extendedThinking?: number; // thinking budget in tokens (min 1024; forces temp=1)
 }
 
-export interface CompletionResult {
+interface CompletionResult {
   content: string;
   tokensUsed?: number;
 }
-
-// Registry
-export class ProviderRegistry {
-  register(name: string, factory: () => Provider): void;
-  has(name: string): boolean;
-  get(name: string): Provider;
-  list(): string[];
-  reset(): void;
-}
-
-// Error classes
-export class NotImplementedError extends Error {}
-export class ProviderError extends Error {}
 ```
 
 ---
 
-## MockProvider Behavior
+## Implementations
 
-`MockProvider` ships two modes:
+### MockProvider
 
-**Deterministic mode** (default): Matches the `Dimension: <value>` line in the prompt against a fixture map and returns canned `CandidateFinding[]`. Patches fixture file/line references to match actual diff paths when possible.
-
-**Scripted mode**: Looks up a response by SHA256 hash of the first 200 characters of the prompt. Used for reproducible testing of specific prompt content.
+Returns deterministic fixture responses without making any API calls. Used by default when no provider is routed for an agent.
 
 ```typescript
-// Deterministic — returns fixtures for the matched dimension
+import { MockProvider } from '@engagement-harness/providers';
+
 const mock = new MockProvider();
-
-// Scripted — matches exact prompt hashes
-const mock = new MockProvider({ scripts: { [hash]: jsonArrayString } });
+const result = await mock.complete('analyze this diff');
+// result.content is a predictable JSON array of CandidateFinding
 ```
 
 ---
 
-## Usage
+### AnthropicProvider
+
+Calls the Anthropic Messages API.
 
 ```typescript
-import { ProviderRegistry, AnthropicProvider, MockProvider } from '@engagement-harness/providers';
+import { AnthropicProvider } from '@engagement-harness/providers';
 
-const registry = new ProviderRegistry();
-// Built-in providers are pre-registered: 'mock', 'anthropic', 'openai'
+const anthropic = new AnthropicProvider({
+  model: 'claude-sonnet-4-6',
+  temperature: 0.1,
+});
 
-const provider = registry.get('anthropic');
-const result = await provider.complete('Your prompt here', { maxTokens: 4096 });
-console.log(result.content);
+const result = await anthropic.complete(prompt, {
+  system: 'You are a security reviewer...',
+  maxTokens: 4000,
+});
 ```
 
-**Environment variables:**
+**Extended thinking:**
 
-| Provider | Variable |
-|---|---|
-| `anthropic` | `ANTHROPIC_API_KEY` |
-| `openai` | `OPENAI_API_KEY` |
+```typescript
+const result = await anthropic.complete(prompt, {
+  system: systemPrompt,
+  extendedThinking: 8000, // 8000-token thinking budget
+  // temperature is automatically omitted when extendedThinking is set
+  // maxTokens is automatically set to max(4000, extendedThinking + 4000)
+});
+```
+
+**Environment variable:** `ANTHROPIC_API_KEY`
+
+**Beta header:** `anthropic-beta: interleaved-thinking-2025-05-14` (added automatically when `extendedThinking` is set)
+
+**Rate limit handling:** HTTP 429 responses raise a `ProviderError` with a clear message to retry later.
 
 ---
 
-## Registering a Custom Provider
+### OpenAIProvider
+
+Calls the OpenAI Chat Completions API.
+
+```typescript
+import { OpenAIProvider } from '@engagement-harness/providers';
+
+const openai = new OpenAIProvider({
+  model: 'gpt-4o',
+  temperature: 0.1,
+});
+```
+
+**Environment variable:** `OPENAI_API_KEY`
+
+---
+
+### ProviderRegistry
+
+Name-based registry used by `ModelRouter` to resolve providers from config.
 
 ```typescript
 import { ProviderRegistry } from '@engagement-harness/providers';
-import type { Provider, CompletionResult } from '@engagement-harness/providers';
-
-class MyProvider implements Provider {
-  readonly name = 'my-provider';
-  async complete(prompt: string): Promise<CompletionResult> {
-    // call your API
-    return { content: '[]', tokensUsed: 0 };
-  }
-}
 
 const registry = new ProviderRegistry();
-registry.register('my-provider', () => new MyProvider());
-```
+registry.register('anthropic', new AnthropicProvider({ model: 'claude-sonnet-4-6' }));
+registry.register('mock', new MockProvider());
 
-Then reference it in `config.json`:
-```json
-{ "models": { "security": "my-provider" } }
+const provider = registry.get('anthropic'); // → AnthropicProvider
+const missing = registry.get('unknown');    // → undefined
 ```
 
 ---
 
-## Dependencies
+## Adding a Custom Provider
 
-- `@engagement-harness/core` — `CandidateFindingSchema` for fixture validation
+Implement the `Provider` interface:
+
+```typescript
+import type { Provider, CompletionOptions, CompletionResult } from '@engagement-harness/providers';
+
+class MyProvider implements Provider {
+  readonly name = 'my-provider';
+  readonly model = 'my-model-v1';
+
+  async complete(prompt: string, options?: CompletionOptions): Promise<CompletionResult> {
+    const response = await myApi.generate({ prompt, ...options });
+    return { content: response.text, tokensUsed: response.usage.total };
+  }
+}
+```
+
+Register it in your application:
+```typescript
+registry.register('my-provider', new MyProvider());
+```
+
+Then route agents to it in config:
+```json
+{ "models": { "reviewer": "my-provider" } }
+```
+
+---
+
+## Error Handling
+
+```typescript
+import { ProviderError } from '@engagement-harness/providers';
+
+try {
+  await provider.complete(prompt);
+} catch (err) {
+  if (err instanceof ProviderError) {
+    console.error(`Provider '${err.providerName}' failed: ${err.message}`);
+  }
+}
+```

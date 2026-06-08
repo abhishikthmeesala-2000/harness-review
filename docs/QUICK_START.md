@@ -1,88 +1,114 @@
 # Quick Start — 5-Minute Setup
 
-This guide gets Engagement Harness running on a real repository in under five minutes.
+This guide gets Engagement Harness running on a real repository in under five minutes, from clone to your first PR review.
 
 ---
 
 ## Prerequisites
 
-- **Node.js ≥ 20** — check with `node --version`
-- **pnpm** — install with `npm install -g pnpm`
-- **Git** — the review command reads the local git diff
-- **GitHub repository** — for CI and feedback collection (local-only mode works without it)
+- Node.js ≥ 20 (`node -v` to check)
+- pnpm (`npm install -g pnpm`)
+- An Anthropic API key (optional for Step 3 — mock provider works without one)
 
 ---
 
-## Step 1: Clone and Build
+## Step 1 — Clone, Build, and Link
 
 ```bash
 git clone https://github.com/abhishikthmeesala-2000/harness-review.git
 cd harness-review
 pnpm install
 pnpm build
+cd packages/cli && npm link && cd ../..
 ```
 
-This compiles all nine packages using TypeScript project references. Build output lands in each package's `dist/` directory.
-
-### Link the CLI globally
+Verify the CLI is available:
 
 ```bash
-cd packages/cli
-npm link
-cd ../..
+engagement-harness --help
 ```
 
-Alternatively, invoke the CLI directly without global linking:
-```bash
-node /path/to/harness-review/packages/cli/dist/bin/engagement-harness.js <command>
-```
+> **pnpm v11 note:** `pnpm link --global` (no-argument form) was removed in pnpm v11. Use `npm link` from `packages/cli` as shown above.
 
 ---
 
-## Step 2: Initialize a Repository
+## Step 2 — Initialize in Your Repository
 
-Run `init` inside the repository you want to review:
+Navigate to the repository you want to review:
 
 ```bash
-cd /path/to/your-client-repo
+cd /path/to/your-repo
 engagement-harness init
 ```
 
-The interactive prompts ask for:
-1. **Client name** — the organization or project name (e.g., `Acme Corp`)
-2. **Engagement ID** — a short slug identifying this engagement (e.g., `payments-platform-2026`)
-3. **CI platform** — `github`, `gitlab`, `azure-devops`, `bitbucket`, or `none`
-4. Which agents to enable (defaults to all nine)
+The interactive prompt asks for:
+- **Client name** — your organization or client name (stored in config for report attribution)
+- **Engagement name** — a slug identifying this project (e.g., `payments-api-2026`)
+- **Enabled agents** — choose from the 9 available agents (all enabled by default)
+- **CI platform** — GitHub, GitLab, Azure DevOps, Bitbucket, or none
 
-`init` creates:
-- `.engagement-harness/config.json` — configuration file
-- `.github/workflows/engagement-harness.yml` — PR review workflow
-- `.github/workflows/feedback-on-merge.yml` — reaction collection on merge
-- `.github/workflows/collect-feedback.yml` — weekly scheduled sweep
-
-Use `-y` to skip prompts and accept all detected defaults:
+For non-interactive use (CI, scripts):
 
 ```bash
-engagement-harness init -y
+engagement-harness init --yes
+```
+
+`init` creates:
+```
+your-repo/
+└── .engagement-harness/
+    ├── config.json          # main configuration
+    ├── rules/               # empty directory for domain rules
+    └── reports/             # review output written here
 ```
 
 ---
 
-## Step 3: Add an API Key
+## Step 3 — Run a Dry Review (No API Key Required)
 
-All agents default to the built-in `ANthropic`, which returns  findings with  API call. To use other real AI providers, export an API key and update `config.json`.
+Without any API key, all agents use the built-in `MockProvider`. This validates that the pipeline is wired correctly without making any API calls:
 
-**Anthropic Claude (recommended):**
+```bash
+engagement-harness review --base main --head HEAD
+```
+
+You should see output like:
+
+```
+✓ Context built: 4 changed files, 127 lines
+✓ Pass 1: per-file analysis (4 files × 9 agents)
+✓ Pass 2: cross-file integration
+✓ Pipeline: 12 candidates → 3 published
+  decision: approved_with_warnings
+✓ Reports written to .engagement-harness/reports/
+```
+
+Run `engagement-harness doctor` to verify the full installation:
+
+```bash
+engagement-harness doctor
+```
+
+To auto-fix detected issues:
+
+```bash
+engagement-harness doctor --fix
+```
+
+---
+
+## Step 4 — Add a Real API Key
+
+Export your Anthropic API key and route the two highest-value agents to it:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-In `.engagement-harness/config.json`:
+Edit `.engagement-harness/config.json`:
 
 ```json
 {
-  "client": { "name": "Acme Corp", "engagement": "payments-platform-2026" },
   "models": {
     "security": "anthropic",
     "reviewer": "anthropic"
@@ -93,93 +119,102 @@ In `.engagement-harness/config.json`:
 }
 ```
 
-**OpenAI GPT:**
-
-```bash
-export OPENAI_API_KEY=sk-...
-```
-
-```json
-{
-  "providers": {
-    "openai": { "model": "gpt-4o-mini" }
-  }
-}
-```
-
-You can mix providers — route `security` to Anthropic and everything else to the mock to minimize costs during a trial.
-
----
-
-## Step 4: Verify the Setup
-
-```bash
-engagement-harness doctor
-```
-
-This checks:
-- `.engagement-harness/config.json` exists and validates against the schema
-- All enabled agent IDs are registered
-- Configured providers are reachable (if API keys are present)
-
-Expected output:
-
-```
-✓ Config found at .engagement-harness/config.json
-✓ Config is valid
-✓ 9 agents enabled
-✓ Provider 'anthropic' reachable
-```
-
----
-
-## Step 5: Run Your First Review
+This routes `security` and `reviewer` to Anthropic Claude and keeps all other agents on mock. Run the review again:
 
 ```bash
 engagement-harness review --base main --head HEAD
 ```
-If you want to do manually. But everything is automatic, once the setup is  done. 
 
-Or compare any two refs:
+To enable all 9 agents on Anthropic:
 
-```bash
-engagement-harness review --base origin/main --head feature/my-feature
-```
-
-### What to Expect
-
-Engagement Harness prints a summary to stdout and writes reports to `.engagement-harness/reports/run-<timestamp>/`:
-
-```
-Engagement Harness Review
-Decision:   needs_manual_review
-Confidence: 76%
-Findings:   3 published / 12 rejected
-
-TOP FINDINGS
-  [HIGH] src/auth.ts:42   Missing authorization check on /admin route
-  [MEDIUM] src/db.ts:17   Non-nullable column added without DEFAULT value
-  [LOW] src/api.ts:88     Error response logged without request context
-```
-
-Reports are available in three formats:
-
-```bash
-engagement-harness report latest          # print most recent to stdout
-ls .engagement-harness/reports/           # list all runs
+```json
+{
+  "models": {
+    "reviewer": "anthropic",
+    "security": "anthropic",
+    "testing": "anthropic",
+    "domain-policy": "anthropic",
+    "data-architecture": "anthropic",
+    "sre-observability": "anthropic",
+    "design-principles": "anthropic",
+    "pr-intent-gap": "anthropic",
+    "remediation": "anthropic"
+  }
+}
 ```
 
 ---
 
-## Step 6: Open a Pull Request
+## Step 5 — Configure CI
 
-Once configured, push the generated workflow files and open a PR. The `engagement-harness.yml` workflow triggers automatically and posts findings as PR comments. Developers react with emoji to provide feedback, which is collected by the `feedback-on-merge.yml` workflow when the PR is merged.
+Generate the CI workflow for your platform:
+
+```bash
+# GitHub Actions
+engagement-harness ci templates --platform github --write
+
+# GitLab CI
+engagement-harness ci templates --platform gitlab --write
+
+# Azure DevOps
+engagement-harness ci templates --platform azure-devops --write
+
+# Bitbucket Pipelines
+engagement-harness ci templates --platform bitbucket --write
+```
+
+`--write` saves the template to the correct path in your repository (e.g., `.github/workflows/engagement-harness.yml` for GitHub). Without `--write`, it prints to stdout.
+
+For GitHub, add your API key as a repository secret:
+
+```
+GitHub → Settings → Secrets and variables → Actions → New repository secret
+Name: ANTHROPIC_API_KEY
+Value: sk-ant-...
+```
+
+Commit and push. On the next PR, the workflow will run automatically.
 
 ---
 
-## Next Steps
+## Step 6 — View Results
 
-- [docs/CONFIGURATION.md](CONFIGURATION.md) — tune confidence thresholds, enable/disable agents, configure CI blocking
-- [docs/AGENTS.md](AGENTS.md) — understand what each agent checks and how to reduce false positives
-- [docs/FEEDBACK_SYSTEM.md](FEEDBACK_SYSTEM.md) — interpret feedback metrics and improve agent accuracy over time
-- [docs/CUSTOM_PROMPTS.md](CUSTOM_PROMPTS.md) — add client-specific rules for the `domain-policy` agent
+After a review runs:
+
+```bash
+# Print the most recent report
+engagement-harness report latest
+
+# List all runs
+engagement-harness report list
+
+# Print a specific run
+engagement-harness report run <run-id>
+```
+
+Reports are also written to `.engagement-harness/reports/`:
+- `<run-id>.json` — machine-readable
+- `<run-id>.md` — human-readable
+- `<run-id>.html` — for stakeholders
+
+---
+
+## What's Next
+
+- [docs/CONFIGURATION.md](CONFIGURATION.md) — Full config field reference
+- [docs/AGENTS.md](AGENTS.md) — What each agent checks and how to tune it
+- [docs/CUSTOM_PROMPTS.md](CUSTOM_PROMPTS.md) — Add client-specific domain rules
+- [docs/FEEDBACK_SYSTEM.md](FEEDBACK_SYSTEM.md) — How reactions improve accuracy over time
+- [docs/TROUBLESHOOTING.md](TROUBLESHOOTING.md) — Common errors and exact fixes
+
+---
+
+## Cleanup
+
+To remove Engagement Harness configuration from a repository:
+
+```bash
+engagement-harness uninit
+```
+
+This removes `.engagement-harness/` and the generated CI workflow files. Pass `--yes` to skip confirmation prompts.

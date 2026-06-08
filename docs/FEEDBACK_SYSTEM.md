@@ -1,198 +1,205 @@
 # Feedback System
 
-Engagement Harness collects developer reactions to finding comments and uses them to calculate per-agent acceptance and false-positive rates. This creates a feedback loop that helps you identify which agents are producing actionable findings and which need tuning.
+Engagement Harness collects developer reactions to finding comments and uses them to calculate per-agent acceptance and false-positive rates. This creates a feedback loop that identifies which agents are producing actionable findings and which need tuning.
 
 ---
 
-## How It Works End-to-End
+## How It Works
 
 ```
-1. engagement-harness review posts finding as a GitHub PR comment
-   Comment body contains a hidden metadata tag:
-   <!-- eh-metadata: findingId=EH-0001 runId=run-1748304000 sourceAgent=security dimension=security severity=critical -->
-
-2. Developer reacts to the comment with an emoji
-   (👍 👎 🚀 😕 👀)
-
-3. On PR merge, the feedback-on-merge workflow runs:
-   engagement-harness feedback collect --repo owner/repo --pr <PR_NUMBER>
-
-4. ReactionCollector calls the GitHub API:
-   - GET /repos/{owner}/{repo}/issues/{pr_number}/comments
-   - Filters comments containing <!-- eh-metadata: ...
-   - Extracts findingId, runId, sourceAgent from each tag
-   - GET /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions
-   - Maps reaction content to FeedbackState
-
-5. Collected FeedbackItem[] is deduplicated and merged into
-   .engagement-harness/feedback/metrics.json
-
-6. MetricsCalculator aggregates per-agent acceptance and FP rates
+PR merged
+    │
+    ▼
+feedback-on-merge.yml runs
+    │
+    ▼
+ReactionCollector fetches all PR comments with eh-metadata tags
+    │
+    ▼
+Maps reactions → FeedbackState per finding
+    │
+    ▼
+FeedbackDeduplicator removes duplicate entries
+    │
+    ▼
+MetricsCalculator computes per-agent rates
+    │
+    ▼
+metrics.json committed to .engagement-harness/feedback/
 ```
 
 ---
 
-## Reaction Emoji Mapping
+## Reaction → Signal Mapping
 
-| Emoji | GitHub `content` value | `FeedbackState` | Meaning |
+Developers react to inline finding comments with standard GitHub emoji. Engagement Harness reads the highest-priority reaction on each comment.
+
+| Emoji | GitHub reaction | `FeedbackState` | Meaning |
 |---|---|---|---|
-| 👍 | `+1` | `accepted` | Finding is valid; developer will fix it |
-| 👎 | `-1` | `false_positive` | Finding is incorrect; should not have been raised |
-| 🚀 | `rocket` | `fixed` | Finding was already addressed |
-| 😕 | `confused` | `dismissed` | Finding is technically valid but not a priority |
-| *(none)* | — | `ignored` | No reaction; not included in metrics |
+| 👎 | `-1` | `false_positive` | This finding is wrong |
+| 👍 | `+1` | `accepted` | Valid finding — we will fix it |
+| 🚀 | `rocket` | `fixed` | Already fixed in this PR or a follow-up |
+| 🎉 | `hooray` | `fixed` | Already fixed |
+| 😕 | `confused` | `dismissed` | Not actionable in this context |
+| 👀 | `eyes` | `acknowledged` | Noted, tracking separately |
+| (none) | — | `ignored` | No reaction recorded |
 
-**Priority order for deduplication:** When a comment has multiple reactions, the state with the highest priority wins: `false_positive` > `accepted` > `fixed` > `dismissed` > `acknowledged` > `ignored`.
+**Priority order** when multiple reactions exist on the same comment:
+```
+-1 > +1 > rocket > hooray > confused > eyes
+```
+
+The `-1` reaction always wins, which prevents a false positive from being counted as accepted just because someone also reacted with `+1`.
 
 ---
 
-## Collection Triggers
+## Comment Metadata
 
-### On PR Merge (`feedback-on-merge.yml`)
+Each finding comment posted by the CI workflow includes a hidden HTML metadata tag:
 
-Runs automatically when a pull request is closed and merged:
+```html
+<!-- eh-metadata: findingId=EH-0001 runId=run_abc123 sourceAgent=security dimension=security severity=high -->
+```
+
+The `ReactionCollector` uses this tag to associate a reaction with the correct finding, agent, and run. Comments without this tag are ignored.
+
+---
+
+## Collection Behavior
+
+Reactions are collected from:
+1. **Issue comments** (`GET /repos/{owner}/{repo}/issues/{pr}/comments`)
+2. **Review comments** (`GET /repos/{owner}/{repo}/pulls/{pr}/comments?state=all`)
+
+The `state=all` parameter ensures outdated (resolved) review threads are also collected — reactions on superseded diff positions are still valid feedback.
+
+**Pagination:** 100 items per page. The collector continues until a page returns fewer than 100 items. Comment IDs are deduplicated across pages.
+
+---
+
+## Collection Commands
+
+### Collect on merge (automatic)
+
+The generated `feedback-on-merge.yml` workflow runs `feedback collect` automatically when a PR is closed and merged:
 
 ```yaml
 on:
   pull_request:
     types: [closed]
+jobs:
+  collect-if-merged:
+    if: github.event.pull_request.merged == true
 ```
 
-Collects reactions from the specific merged PR. This is the primary collection path — reactions are most meaningful when the PR is complete and the team has had time to react.
-
-### Weekly Scheduled Sweep (`collect-feedback.yml`)
-
-Runs on a configurable schedule (default: Mondays at 9 AM UTC) to sweep the last 7 days of PRs. This catches reactions added after merge.
-
-Set the schedule in `config.json`:
-```json
-{
-  "feedback": {
-    "collectionSchedule": "0 9 * * 1"
-  }
-}
-```
-
----
-
-## CLI Commands
-
-### Collect reactions manually
+### Collect manually
 
 ```bash
-# Collect reactions from the last 7 days of PRs
-engagement-harness feedback collect --repo owner/repo
+# Auto-detect repo from git remote (when run inside the target repo)
+engagement-harness feedback collect
 
-# Collect reactions from a specific PR
+# Explicit repo and PR
 engagement-harness feedback collect --repo owner/repo --pr 42
 
-# Collect reactions from the last 30 days
+# All PRs from the last 30 days
 engagement-harness feedback collect --repo owner/repo --days 30
 
-# Collect and write a Claude memory file
-engagement-harness feedback collect --repo owner/repo --memory-dir ~/.claude/memory
+# Since a specific date
+engagement-harness feedback collect --repo owner/repo --since 2026-01-01
+
+# Custom memory directory
+engagement-harness feedback collect --repo owner/repo --memory-dir /path/to/.engagement-harness/feedback
 ```
 
-Requires `GITHUB_TOKEN` environment variable with `read:discussion` permission on the repository.
-
-### Print a feedback report
-
-```bash
-# Human-readable text report
-engagement-harness feedback report
-
-# JSON output for scripting
-engagement-harness feedback report --format json
-```
+Requires `GITHUB_TOKEN` environment variable with `pull-requests:read` permission.
 
 ### Import feedback from a file
 
 ```bash
-engagement-harness feedback import /path/to/feedback.json
+engagement-harness feedback import feedback-export.json
 ```
 
-The import file should contain a `FeedbackEntry` or array of `FeedbackEntry` objects:
-
-```json
-[
-  {
-    "findingId": "EH-0001",
-    "runId": "run-1748304000",
-    "state": "accepted",
-    "timestamp": "2025-09-01T10:00:00.000Z"
-  }
-]
-```
-
-Valid `state` values: `accepted`, `false_positive`, `fixed`, `dismissed`, `acknowledged`, `ignored`.
+Imports a JSON file containing `FeedbackItem[]`. Useful for bulk imports from external systems or migrating historical data.
 
 ---
 
-## `metrics.json` Structure
+## Metrics
 
-Stored at `.engagement-harness/feedback/metrics.json`:
+After collection, `metrics.json` is written to `.engagement-harness/feedback/metrics.json`:
 
 ```json
 {
-  "lastUpdated": "2025-09-01T10:00:00.000Z",
-  "totalEntries": 47,
+  "lastUpdated": "2026-06-08T14:30:00Z",
+  "totalEntries": 247,
   "byState": {
-    "accepted": 28,
-    "false_positive": 6,
-    "fixed": 8,
-    "dismissed": 5
+    "accepted": 148,
+    "false_positive": 52,
+    "fixed": 31,
+    "dismissed": 12,
+    "acknowledged": 4
   },
   "byAgent": {
     "security": {
-      "totalFindings": 15,
+      "totalFindings": 89,
       "feedback": {
-        "accepted": 12,
-        "false_positive": 1,
-        "dismissed": 2
+        "accepted": 71,
+        "false_positive": 9,
+        "fixed": 6,
+        "dismissed": 3
       },
-      "acceptanceRate": 0.8,
-      "falsePositiveRate": 0.067
+      "acceptanceRate": 0.798,
+      "falsePositiveRate": 0.101
     },
     "reviewer": {
-      "totalFindings": 12,
-      "feedback": {
-        "accepted": 7,
-        "false_positive": 3,
-        "dismissed": 2
-      },
-      "acceptanceRate": 0.583,
-      "falsePositiveRate": 0.25
+      "totalFindings": 64,
+      "feedback": { ... },
+      "acceptanceRate": 0.734,
+      "falsePositiveRate": 0.141
     }
   },
   "entries": [...]
 }
 ```
 
-### Key Metrics
+### Key metrics
 
-| Metric | Formula | Target |
+| Metric | Formula | Good value |
 |---|---|---|
-| `acceptanceRate` | `accepted / (accepted + false_positive + dismissed)` | > 0.7 |
-| `falsePositiveRate` | `false_positive / totalFindings` | < 0.15 |
+| `acceptanceRate` | `accepted / (total with feedback)` | > 0.7 |
+| `falsePositiveRate` | `false_positive / (total with feedback)` | < 0.2 |
+
+When `falsePositiveRate` exceeds 0.2 for an agent, the system recommends tightening that agent's prompt or lowering its confidence via the `CONSERVATIVE_FINDING_BLOCK`.
 
 ---
 
-## Interpreting Metrics
+## Viewing Metrics
 
-**High false-positive rate (> 0.3) for an agent:**
-- The agent's confidence threshold may be too low — raise `review.confidenceThreshold`
-- The agent may be flagging patterns your team accepts intentionally — add a rule or exception
-- Check `review.severityThreshold` — filtering out `low` severity often reduces noise
+```bash
+# Human-readable report
+engagement-harness feedback report
 
-**Low acceptance rate for `domain-policy`:**
-- Rule files may be too broad in their glob patterns
-- Rules may describe aspirational rather than enforced standards — narrow or remove them
+# JSON format (for tooling)
+engagement-harness feedback report --format json
 
-**High acceptance rate for `security`:**
-- Consider enabling CI blocking: `ci.blockOnPolicy: true`
-- Consider lowering the confidence threshold for security agent only
+# Executive summary for pilot program
+engagement-harness feedback pilot-report --days 30
+```
 
-**No feedback collected:**
-- Verify `ci.postComments: true` in config
-- Verify the `GITHUB_TOKEN` secret is set in the CI workflow with comment write permissions
-- Confirm `alm.platform: "github"` is set
+The pilot report includes:
+- Total PRs reviewed
+- Total findings published
+- Per-agent acceptance and false-positive rates
+- Agents that need tuning (FP rate > 20%)
+- Trend over the specified time window
+
+---
+
+## Tuning Based on Feedback
+
+If an agent has a high false-positive rate:
+
+1. Run `engagement-harness feedback report` to identify the worst-offending agent
+2. Review `entries` in `metrics.json` to find common patterns in rejected findings
+3. Add a suppression rule to `CONSERVATIVE_FINDING_BLOCK` in the agent's system prompt, or add a domain rule to `.engagement-harness/rules/` that explicitly excludes the pattern
+4. Lower `review.confidenceThreshold` to require stronger evidence before publishing
+5. Re-review a recent PR with the updated configuration and compare results

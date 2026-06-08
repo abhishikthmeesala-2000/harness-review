@@ -4,60 +4,88 @@
 
 | Version | Supported |
 |---|---|
-| 0.3.x | Yes |
-| 0.2.x | Yes |
-| 0.1.x | Yes |
+| 0.1.x | ✅ Active |
 
 ---
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Engagement Harness, please report it privately rather than opening a public GitHub issue.
+**Do not open a public GitHub issue for security vulnerabilities.**
 
-**Email:** Report to the repository maintainers via the contact information in the GitHub profile. Include:
+Report security vulnerabilities through [GitHub Security Advisories](https://github.com/abhishikthmeesala-2000/harness-review/security/advisories/new). You will receive a response within 72 hours.
 
-1. A description of the vulnerability and its potential impact
-2. Steps to reproduce
-3. Any suggested remediation
+Include:
+- A description of the vulnerability and its potential impact
+- Steps to reproduce, or a proof-of-concept
+- Affected version(s)
+- Any suggested mitigations
 
-We will acknowledge the report within 3 business days and provide a timeline for a fix.
+We will acknowledge receipt, keep you informed of the fix timeline, and credit you in the release notes unless you prefer otherwise.
 
 ---
 
-## What Data Is Protected
+## What Data Is Sent to AI Providers
+
+Engagement Harness sends the following to your configured AI provider (Anthropic or OpenAI):
+
+**Sent:**
+- The diff of changed files (lines added/removed)
+- Imported file context (imports and exports from changed files)
+- Client rule files from `.engagement-harness/rules/*.md`
+- Agent system prompts
+
+**Not sent:**
+- Full file contents beyond the diff and imported context
+- Git history or commit messages (except PR title/body for `pr-intent-gap`)
+- Credentials, environment variables, or config files outside `.engagement-harness/`
 
 ### Secret Redaction
 
-Engagement Harness applies `SecretRedactor` to all diff content, file content, and PR metadata before any agent prompt is sent to an external provider. The following patterns are redacted to `[REDACTED_SECRET]`:
+Before any context is passed to an agent, it runs through `SecretRedactor` in `packages/core/src/redaction/`. This strips patterns matching:
 
-| Pattern | Example match |
-|---|---|
-| PEM private keys | `-----BEGIN RSA PRIVATE KEY-----` blocks |
-| AWS access keys | `AKIA[0-9A-Z]{16}` |
-| GitHub tokens | `gh[psuro]_[A-Za-z0-9]{36,}` |
-| `sk-` prefixed API keys | `sk-ant-...`, `sk-proj-...` |
-| JWTs | Three-segment `eyJ...eyJ...` format |
-| Bearer tokens | `Authorization: Bearer <token>` |
-| Env-style secrets | `SECRET=...`, `PASSWORD=...`, `API_KEY=...`, `TOKEN=...`, `CREDENTIAL=...` |
+- API keys (`sk-`, `AKIA`, `ghp_`, `Bearer `, etc.)
+- Connection strings with embedded passwords
+- Private key blocks (`-----BEGIN * PRIVATE KEY-----`)
+- Generic high-entropy strings adjacent to known key names
 
-**Limitation:** Redaction is pattern-based. A secret encoded in an unusual format (e.g., base64-wrapped without standard headers, rotated prefix) may not be caught. Never commit real secrets to version control — treat redaction as a safety net, not a substitute for proper secret management.
-
-### API Keys in Config
-
-The `config.json` file does not store API keys. Keys are read exclusively from environment variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`). The `.engagement-harness/` directory should be committed to version control; it contains no secrets.
-
-### Report Content
-
-Reports written to `.engagement-harness/reports/` contain finding descriptions and code snippets from the diff. In most cases this includes non-sensitive code, but review report content before sharing externally.
+**Redaction is best-effort.** Do not rely on it as a substitute for keeping secrets out of your diff. If a secret appears in a diff, it has already been committed to git history.
 
 ---
 
-## What Engagement Harness Does Not Do
+## Data Retention
 
-- **Never executes code** — diffs are read as text only; no subprocess runs application code from the reviewed repository
-- **Never auto-commits** — the `remediate` command produces plan text only; it does not modify files or create commits
-- **Never posts comments without opt-in** — `ci.postComments` must be explicitly set to `true` in config
-- **Never blocks CI without opt-in** — `ci.blockOnPolicy` defaults to `false`
-- **Never calls live AI providers without explicit config** — agents use `MockProvider` unless a named provider is configured in `config.models`
+Engagement Harness makes direct API calls to your configured provider. The data sent in these calls is subject to that provider's data retention policy:
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for implementation details on secret redaction and the full data flow.
+- **Anthropic API**: Business customers can opt out of data training. See [Anthropic's privacy policy](https://www.anthropic.com/legal/privacy).
+- **OpenAI API**: API data is not used for training by default. See [OpenAI's API data usage policy](https://openai.com/policies/api-data-usage-policies).
+
+Engagement Harness itself retains no data outside of:
+- Reports written to `.engagement-harness/reports/` on your local disk or CI runner
+- Feedback metrics written to `.engagement-harness/feedback/metrics.json` in your repository
+- Eval fixture files committed to this repository
+
+---
+
+## CI Workflow Permissions
+
+The generated `engagement-harness.yml` and `feedback-on-merge.yml` workflows require the following GitHub Actions permissions:
+
+```yaml
+permissions:
+  contents: write      # commit metrics.json
+  pull-requests: write # post inline comments and summary comment
+```
+
+Scope these as narrowly as your organization's policy allows. If you use a GitHub App token instead of `GITHUB_TOKEN`, grant only `contents:write` and `pull-requests:write` on the target repository.
+
+---
+
+## Dependency Security
+
+Engagement Harness uses a pinned `pnpm-lock.yaml`. Dependabot is configured to open PRs for dependency updates. All dependency updates go through the standard PR + CI review process before merge.
+
+To audit dependencies manually:
+
+```bash
+pnpm audit
+```

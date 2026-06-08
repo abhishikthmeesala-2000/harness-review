@@ -4,103 +4,123 @@ Nine specialized AI review agents plus the orchestrator and model router for Eng
 
 ---
 
-## Key Modules
+## Installation
 
-| File | Purpose |
-|---|---|
-| `src/base.ts` | `BaseAgent` abstract class — prompt execution, JSON parsing, schema validation |
-| `src/orchestrator.ts` | `AgentOrchestrator` — runs all enabled agents concurrently |
-| `src/per-file-orchestrator.ts` | `PerFileOrchestrator` — Pass 1: runs orchestrator once per changed file in parallel |
-| `src/cross-file-reviewer.ts` | `CrossFileReviewer` — Pass 2: single cross-file integration review |
-| `src/router.ts` | `ModelRouter` — maps agent IDs to provider names from config |
-| `src/prompt-utils.ts` | `renderDiffSummary`, `renderFileContext`, `renderFunctionContext`, `FINDING_SCHEMA_BLOCK` |
-| `src/reviewer.ts` | `ReviewerAgent` — correctness dimension |
-| `src/security.ts` | `SecurityAgent` — security dimension |
-| `src/testing.ts` | `TestingAgent` — testing dimension |
-| `src/domain-policy.ts` | `DomainPolicyAgent` — domain-policy dimension |
-| `src/data-architecture.ts` | `DataArchitectureAgent` — data dimension |
-| `src/sre-observability.ts` | `SREObservabilityAgent` — observability dimension |
-| `src/design-principles.ts` | `DesignPrinciplesAgent` — design dimension |
-| `src/pr-intent-gap.ts` | `PRIntentGapAgent` — intent-gap dimension |
-| `src/remediation.ts` | `RemediationAgent` + `RemediationPlanSchema` — generates fix plans on demand |
-
----
-
-## Key Exported Types and Classes
-
-```typescript
-// Base class
-export abstract class BaseAgent {
-  abstract readonly id: string;
-  abstract readonly dimension: string;
-  abstract readonly description: string;
-  abstract promptTemplate(context: ContextBundle): string;
-  async run(context: ContextBundle, provider: Provider): Promise<CandidateFinding[]>;
-}
-
-// Orchestrator
-export class AgentOrchestrator {
-  async run(bundle: ContextBundle, config: Config): Promise<CandidateFinding[]>;
-}
-
-// Two-pass orchestration
-export class PerFileOrchestrator {
-  constructor(orchestrator: AgentOrchestrator);
-  async execute(context: ContextBundle, config: Config): Promise<CandidateFinding[]>; // tags pass: "local"
-}
-
-export class CrossFileReviewer {
-  constructor(provider: Provider);
-  async execute(context: ContextBundle, pass1Findings: CandidateFinding[]): Promise<CandidateFinding[]>; // tags pass: "integration"
-}
-
-// Router
-export class ModelRouter {
-  resolve(agentId: string, config: Config): string; // returns provider name
-}
-
-// Remediation
-export const RemediationPlanSchema: z.ZodObject<...>;
-export type RemediationPlan = {
-  findingId: string;
-  plan: string;
-  suggestedPatch?: string;
-  testRecommendations: string[];
-  estimatedEffort: 'trivial' | 'small' | 'medium' | 'large';
-};
+```bash
+pnpm add @engagement-harness/agents
 ```
 
 ---
 
-## Usage
+## Agents
+
+| Agent ID | Dimension | Short-circuits when |
+|---|---|---|
+| `reviewer` | `correctness` | Never |
+| `security` | `security` | Never |
+| `testing` | `testing` | Never |
+| `domain-policy` | `domain-policy` | No rule files match diff |
+| `data-architecture` | `data` | No migration/schema/ORM paths in diff |
+| `sre-observability` | `observability` | Never |
+| `design-principles` | `design` | Changed lines < 20 |
+| `pr-intent-gap` | `intent-gap` | No PR metadata supplied |
+| `remediation` | `remediation` | — (non-finding agent) |
+
+---
+
+## AgentOrchestrator
+
+Runs all enabled agents across two passes and returns raw `CandidateFinding[]`.
 
 ```typescript
 import { AgentOrchestrator } from '@engagement-harness/agents';
-import type { ContextBundle, Config } from '@engagement-harness/core';
+import { ProviderRegistry } from '@engagement-harness/providers';
 
-const orchestrator = new AgentOrchestrator();
-const candidates = await orchestrator.run(bundle, config);
-// candidates: CandidateFinding[] from all enabled agents
+const registry = new ProviderRegistry();
+registry.register('anthropic', anthropicProvider);
+registry.register('mock', mockProvider);
+
+const orchestrator = new AgentOrchestrator({ config, registry });
+const findings = await orchestrator.run(contextBundle);
 ```
 
-The orchestrator uses `Promise.allSettled` — a single agent failure does not stop other agents from running. Failed agents log a warning and contribute zero findings.
+The orchestrator runs:
+1. **Pass 1 — per-file** (`PerFileOrchestrator`): all enabled agents × each changed file in parallel. Findings tagged `pass: "local"`.
+2. **Pass 2 — cross-file** (`CrossFileReviewer`): all files in one prompt, skipped if only 1 file changed. Findings tagged `pass: "integration"`.
 
 ---
 
-## Agent Auto-Skip Behavior
+## ModelRouter
 
-| Agent | Skips when |
-|---|---|
-| `domain-policy` | No rule entries in `ContextBundle` match changed paths |
-| `data-architecture` | No paths matching `/migration\|schema\|models\/\|db\/\|\.sql$/i` in diff |
-| `pr-intent-gap` | No `prMetadata.title` and no `prMetadata.body` |
-| `remediation` | Always (use `RemediationAgent.remediate()` directly, not via orchestrator) |
+Resolves which provider to use for a given agent ID.
+
+```typescript
+import { ModelRouter } from '@engagement-harness/agents';
+
+const router = new ModelRouter(registry);
+const provider = router.route('security', config);
+// Uses config.models['security'] if set, falls back to 'mock'
+```
 
 ---
 
-## Dependencies
+## Introspection
 
-- `@engagement-harness/core` — `ContextBundle`, `CandidateFinding`, `Config`
-- `@engagement-harness/providers` — `Provider` interface
-- `chalk` — colored console warnings
-- `zod` — `RemediationPlanSchema` validation
+```typescript
+import { listAgents, DEFAULT_AGENT_IDS } from '@engagement-harness/agents';
+
+// All available agent IDs
+console.log(DEFAULT_AGENT_IDS);
+// ['reviewer', 'security', 'testing', 'domain-policy', 'data-architecture',
+//  'sre-observability', 'design-principles', 'pr-intent-gap', 'remediation']
+
+// Agent metadata (id, dimension, description)
+const agents = listAgents();
+```
+
+---
+
+## Remediation Agent
+
+The `remediation` agent generates BEFORE/AFTER code patches for an existing finding. It is not part of the normal orchestrator finding pipeline — invoke it separately:
+
+```typescript
+import { RemediationAgent } from '@engagement-harness/agents';
+
+const agent = new RemediationAgent(config);
+const patch = await agent.remediate(finding, contextBundle, provider);
+// patch: { before, after, effort, testRecommendation, notes }
+```
+
+The agent calls `detectTechStack(contextBundle)` to determine the repository's language, framework, ORM, test runner, and package manager before generating the patch.
+
+---
+
+## Adding a New Agent
+
+1. Create `packages/agents/src/my-agent.ts` extending `BaseAgent`
+2. Implement `getAgentDimension(): string` and `buildPrompt(context): string | null`
+3. Add to `AGENT_FACTORIES` in `orchestrator.ts`: `'my-agent': (config) => new MyAgent(config)`
+4. Add to `DEFAULT_AGENT_IDS` array
+
+Return `null` from `buildPrompt()` to short-circuit and skip the API call.
+
+---
+
+## Extended Thinking
+
+Two agents use Anthropic's extended thinking:
+
+```typescript
+// In reviewer.ts
+return this.provider.complete(prompt, {
+  system: REVIEWER_SYSTEM_PROMPT,
+  extendedThinking: 8000,  // 8000-token thinking budget
+});
+
+// In security.ts
+return this.provider.complete(prompt, {
+  system: SECURITY_SYSTEM_PROMPT,
+  extendedThinking: 10000, // 10000-token thinking budget
+});
+```

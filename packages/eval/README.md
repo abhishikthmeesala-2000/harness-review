@@ -1,134 +1,118 @@
 # @engagement-harness/eval
 
-Evaluation framework for Engagement Harness. Runs orchestrator + pipeline against fixture repositories and scores precision, recall, true positives, false positives, and false negatives against expected findings.
+Evaluation framework for Engagement Harness. Runs the orchestrator and pipeline against fixture repositories and scores precision, recall, true positives, false positives, and false negatives against expected findings.
 
 ---
 
-## Key Modules
+## Installation
 
-| File | Purpose |
-|---|---|
-| `src/runner.ts` | `EvalRunner` — load cases, run pipeline, score results, write eval report |
-| `src/case-schema.ts` | `EvalCaseSchema`, `EvalCase`, `ExpectedFinding`, `ContextRule` |
-| `src/feedback.ts` | `FeedbackImporter` — merge `FeedbackEntry[]` into `metrics.json` |
+```bash
+pnpm add @engagement-harness/eval
+```
 
 ---
 
-## Key Exported Types and Classes
+## Eval Case Schema
+
+An eval case describes a fixture PR scenario and what findings are expected.
 
 ```typescript
-// Case schema
-export const EvalCaseSchema: z.ZodObject<...>;
-
-export interface EvalCase {
+interface EvalCase {
   name: string;
   description: string;
-  fixtureRepoPath: string;
-  baseRef: string;
-  headRef: string;
-  prTitle?: string;
-  prBody?: string;
+  fixtureRepoPath: string;     // relative to the eval-cases directory, or "."
+  baseRef: string;             // informational git ref
+  headRef: string;             // informational git ref
+  prTitle: string;
+  prBody: string;
   expectedFindings: ExpectedFinding[];
   expectedDecision: PolicyDecision;
-  maxFalsePositives: number; // default 1
-  contextRules?: ContextRule[];
+  maxFalsePositives: number;   // default: 1
+  contextRules?: ContextRule[];  // domain rules injected for this case
 }
 
-export interface ExpectedFinding {
-  category: FindingCategory;
+interface ExpectedFinding {
+  category: FindingCategory;   // maps to agent dimension
   severity?: FindingSeverity;
-  fileGlob?: string; // micromatch pattern
-  mustMatchPhrases?: string[]; // case-insensitive, checked in title or evidence
+  fileGlob: string;            // micromatch pattern — which file the finding must be in
+  mustMatchPhrases: string[];  // all phrases must appear in the finding's title or reasoning
 }
 
-export interface ContextRule {
-  path: string;
-  content: string;
-}
-
-// Runner
-export class EvalRunner {
-  static runAll(casesDir: string, config: Config): Promise<EvalReport>;
-  static runCase(casePath: string, config: Config): Promise<EvalCaseResult>;
-}
-
-// Feedback importer
-export interface FeedbackEntry {
-  findingId: string;
-  runId: string;
-  state: FeedbackState;
-  note?: string;
-  timestamp: string; // ISO 8601
-}
-
-export class FeedbackImporter {
-  import(filePath: string, repoRoot: string): Promise<void>;
+interface ContextRule {
+  path: string;    // rule file path (e.g., 'rules/api-conventions.md')
+  content: string; // rule file content
 }
 ```
 
 ---
 
-## Eval Case Directory Structure
+## Running Evals
 
-```
-packages/eval/src/cases/
-├── security-missing-auth/
-│   ├── case.json          # EvalCase definition
-│   └── diff.patch         # Synthetic unified diff
-├── clean-pr/
-│   ├── case.json
-│   └── diff.patch
-└── domain-policy-violation/
-    ├── case.json
-    └── diff.patch
+```typescript
+import { EvalRunner } from '@engagement-harness/eval';
+
+const runner = new EvalRunner({ config, registry });
+const results = await runner.run(evalCases);
 ```
 
-`case.json` example:
-```json
-{
-  "name": "security-missing-auth",
-  "description": "Route handler added without authorization middleware",
-  "fixtureRepoPath": ".",
-  "baseRef": "HEAD~1",
-  "headRef": "HEAD",
-  "prTitle": "Add admin dashboard route",
-  "expectedFindings": [
-    {
-      "category": "security",
-      "severity": "high",
-      "fileGlob": "src/**",
-      "mustMatchPhrases": ["authorization", "auth"]
-    }
-  ],
-  "expectedDecision": "needs_manual_review",
-  "maxFalsePositives": 1
-}
-```
-
----
-
-## Running the Eval Suite
-
+From the CLI:
 ```bash
 engagement-harness eval
 ```
 
-Or directly:
-```typescript
-import { EvalRunner } from '@engagement-harness/eval';
+---
 
-const report = await EvalRunner.runAll('./packages/eval/src/cases', config);
-console.log(`Precision: ${report.precision}, Recall: ${report.recall}`);
+## Eval Result
+
+```typescript
+interface EvalResult {
+  caseName: string;
+  passed: boolean;
+  truePositives: number;
+  falsePositives: number;
+  falseNegatives: number;
+  precision: number;
+  recall: number;
+  publishedFindings: Finding[];
+  missedExpected: ExpectedFinding[];
+  unexpectedFindings: Finding[];
+  decision: PolicyDecision;
+  expectedDecision: PolicyDecision;
+  decisionMatch: boolean;
+}
 ```
+
+A case **passes** when:
+- All `expectedFindings` are matched (true positive for each)
+- False positive count ≤ `maxFalsePositives`
+- `decision` matches `expectedDecision`
 
 ---
 
-## Dependencies
+## Matching Logic
 
-- `@engagement-harness/core` — schemas, config, context
-- `@engagement-harness/agents` — `AgentOrchestrator`
-- `@engagement-harness/pipeline` — `FindingPipeline`
-- `@engagement-harness/providers` — `ProviderRegistry`
-- `@engagement-harness/reports` — `ReportGenerator`
-- `micromatch` — file glob matching for `ExpectedFinding.fileGlob`
-- `zod` — `EvalCaseSchema` and `FeedbackEntrySchema` validation
+An expected finding is matched when a published finding satisfies all three conditions:
+1. `finding.file` matches `expectedFinding.fileGlob` (micromatch)
+2. `finding.dimension` matches `expectedFinding.category`
+3. All strings in `mustMatchPhrases` appear (case-insensitive) in `finding.title + finding.reasoning`
+
+---
+
+## FeedbackImporter
+
+Imports historical feedback from a JSON file for bulk-loading into `metrics.json`.
+
+```typescript
+import { FeedbackImporter } from '@engagement-harness/eval';
+
+const importer = new FeedbackImporter({
+  storePath: '.engagement-harness/feedback/metrics.json',
+});
+
+await importer.importFile('historical-feedback.json');
+```
+
+From the CLI:
+```bash
+engagement-harness feedback import historical-feedback.json
+```

@@ -4,22 +4,35 @@ about: Propose a new feature or enhancement
 labels: enhancement
 ---
 
-## Summary
+## Problem Statement
 
-<!-- One sentence description of the feature -->
-
-## Problem It Solves
-
-<!-- What specific limitation or pain point does this address? -->
+<!-- What can't you do today? What is the gap or friction you're experiencing?
+     Describe the problem, not the solution. -->
 
 ## Proposed Solution
 
-<!-- Describe your preferred approach. Be as specific as possible — include CLI command names, config field names, or API shapes if applicable. -->
+<!-- How would you like this to work? Be as specific as you can.
+     What would the CLI command look like? What config field would be added? -->
+
+## Which Package Would Be Affected?
+
+<!-- Check all that apply -->
+- [ ] `core` (schemas, config, context engine)
+- [ ] `agents` (adding or changing an agent)
+- [ ] `pipeline` (finding pipeline stages)
+- [ ] `providers` (AI provider integration)
+- [ ] `reports` (output formats)
+- [ ] `feedback` (reaction collection or metrics)
+- [ ] `eval` (evaluation runner)
+- [ ] `ci` (CI comments or workflow templates)
+- [ ] `cli` (new command or flag)
 
 ## Alternatives Considered
 
-<!-- What other approaches did you consider? Why did you prefer the proposed solution? -->
+<!-- What other approaches did you consider? Why is your proposed solution better? -->
 
-## Additional Context
+## Would You Submit a PR?
 
-<!-- Links to related issues, prior art, or relevant documentation -->
+- [ ] Yes, I'd like to implement this
+- [ ] Yes, with guidance
+- [ ] No, I'm requesting this for others to implement

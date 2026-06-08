@@ -4,120 +4,229 @@ Command-line interface for Engagement Harness. Built with Commander.js and wired
 
 ---
 
-## Key Modules
+## Installation
 
-| Path | Purpose |
-|---|---|
-| `src/index.ts` | `buildProgram()` — assembles the Commander.js program; `run(argv)` — entry point |
-| `bin/engagement-harness.js` | Binary entry point (calls `run(process.argv)`) |
-| `src/commands/init.ts` | Interactive repository initialization |
-| `src/commands/uninit.ts` | Remove config, scaffold, and workflows |
-| `src/commands/doctor.ts` | Validate installation, config, and environment |
-| `src/commands/review.ts` | PR review orchestration |
-| `src/commands/remediate.ts` | Remediation plan generation |
-| `src/commands/report.ts` | `reportLatestCommand`, `reportRunCommand`, `reportListCommand` |
-| `src/commands/config-validate.ts` | Validate current config |
-| `src/commands/agents-list.ts` | List registered agents |
-| `src/commands/models-list.ts` | List providers and routing |
-| `src/commands/models-validate.ts` | Validate provider availability |
-| `src/commands/ci-templates.ts` | Generate CI workflow templates |
-| `src/commands/eval.ts` | Run eval suite |
-| `src/commands/feedback-collect.ts` | Collect GitHub PR reactions |
-| `src/commands/feedback-import.ts` | Import feedback JSON |
-| `src/commands/feedback-report.ts` | Print feedback metrics report |
-| `src/utils/git.ts` | Git utilities — branch, remote, platform detection |
-| `src/utils/errors.ts` | `CliError` class |
+```bash
+# Link globally from the monorepo
+cd packages/cli
+npm link
+```
+
+The binary is `engagement-harness`.
 
 ---
 
-## Full Command Reference
+## Command Reference
 
+### `init [--yes]`
+
+Initialize Engagement Harness in the current repository.
+
+```bash
+engagement-harness init          # interactive
+engagement-harness init --yes    # non-interactive, accept all defaults
 ```
-engagement-harness [options] <command>
+
+Creates `.engagement-harness/config.json`, `.engagement-harness/rules/`, and `.engagement-harness/reports/`.
+
+---
+
+### `uninit [--yes]`
+
+Remove Engagement Harness config, scaffold, and generated workflow files from the current repository.
+
+```bash
+engagement-harness uninit
+engagement-harness uninit --yes  # skip confirmation
+```
+
+---
+
+### `doctor [--fix]`
+
+Validate installation, config, and environment.
+
+```bash
+engagement-harness doctor
+engagement-harness doctor --fix  # attempt to auto-fix detected issues
+```
+
+Checks: CLI is linked, config.json is valid, configured providers have API keys, ALM platform is reachable.
+
+---
+
+### `review [options]`
+
+Run a pull request review.
+
+```bash
+engagement-harness review
+engagement-harness review --base main --head HEAD
+engagement-harness review --ci --base main --head $GITHUB_SHA
+```
 
 Options:
-  -v, --version             output version (0.1.0)
-  -h, --help                display help
-
-Commands:
-  init [options]            Initialize Engagement Harness in the current repository
-    -y, --yes               Non-interactive mode using detected defaults
-
-  uninit [options]          Remove config, scaffold, and workflows
-    -y, --yes               Skip all prompts
-
-  doctor                    Validate installation, config, and environment
-
-  review [options]          Run a pull request review
-    --ci                    Headless CI mode
-    --base <ref>            Base git ref for diff (overrides auto-detect)
-    --head <ref>            Head git ref for diff (overrides auto-detect)
-
-  remediate [options]       Generate a remediation plan for a finding
-    --finding <id>          Finding ID (e.g. EH-0001)
-
-  report <subcommand>
-    report latest           Print the most recent report to stdout
-    report run <id>         Print a specific run report to stdout
-    report list             List all run IDs with timestamps and decisions
-
-  config <subcommand>
-    config validate         Validate the current configuration
-
-  agents <subcommand>
-    agents list             List registered agents
-
-  models <subcommand>
-    models list             List registered providers and routing
-    models validate         Validate provider routing for each agent
-
-  ci <subcommand>
-    ci templates [options]  Generate CI workflow templates
-      --platform <name>     github | gitlab | azure-devops | bitbucket
-      --write               Write the template to disk
-      --no-print            Do not print to stdout
-      --context <mode>      client | source | auto (default: auto)
-
-  eval                      Run the eval suite against fixture cases
-
-  feedback <subcommand>
-    feedback collect [opts] Collect feedback from GitHub PR reaction emojis
-      --repo <owner/repo>   GitHub repository (required)
-      --pr <number>         Specific PR number to scan
-      --days <number>       Days to look back (default: 7)
-      --since <date>        ISO date or "Xdays" shorthand
-      --memory-dir <path>   Write Claude memory file after collecting
-    feedback import <file>  Import a feedback JSON file
-    feedback report [opts]  Print a feedback metrics report
-      --format <format>     text | json (default: text)
-```
+- `--base <ref>` — base git ref (default: `main`)
+- `--head <ref>` — head git ref (default: `HEAD`)
+- `--ci` — CI mode: suppress interactive output, use ALM to post comments
 
 ---
 
-## Usage
+### `remediate --finding <id>`
 
-```typescript
-import { run } from '@engagement-harness/cli';
-await run(process.argv);
-```
+Generate a BEFORE/AFTER code patch for a specific finding.
 
-Or via the binary:
 ```bash
-engagement-harness review --base main --head HEAD
+engagement-harness remediate --finding EH-0001
+```
+
+Reads the finding from the most recent run report, generates a tech-stack-aware patch.
+
+---
+
+### `report <subcommand>`
+
+Report inspection utilities.
+
+```bash
+engagement-harness report latest          # print the most recent report
+engagement-harness report run <id>        # print a specific run report
+engagement-harness report list            # list all run IDs with timestamps and decisions
 ```
 
 ---
 
-## Dependencies
+### `config validate`
 
-- `@engagement-harness/agents` — `AgentOrchestrator`
-- `@engagement-harness/ci` — `GitHubCommenter`
-- `@engagement-harness/core` — config, context, diff, schemas
-- `@engagement-harness/eval` — `EvalRunner`
-- `@engagement-harness/feedback` — `ReactionCollector`, `FeedbackStore`, `MetricsCalculator`
-- `@engagement-harness/pipeline` — `FindingPipeline`
-- `@engagement-harness/providers` — `ProviderRegistry`
-- `@engagement-harness/reports` — `ReportGenerator`, `ReportWriter`
-- `commander` — CLI framework
-- `@inquirer/prompts` — interactive init prompts
-- `chalk` — colored console output
+Validate the current `.engagement-harness/config.json` against the schema.
+
+```bash
+engagement-harness config validate
+```
+
+---
+
+### `agents list`
+
+List all registered agents with their IDs, dimensions, and descriptions.
+
+```bash
+engagement-harness agents list
+```
+
+---
+
+### `models list`
+
+Show the per-agent provider routing based on the current config.
+
+```bash
+engagement-harness models list
+```
+
+---
+
+### `models validate`
+
+Check that each configured provider is reachable (API key present and valid).
+
+```bash
+engagement-harness models validate
+```
+
+---
+
+### `ci templates [options]`
+
+Generate CI workflow templates for your platform.
+
+```bash
+engagement-harness ci templates --platform github
+engagement-harness ci templates --platform github --write
+engagement-harness ci templates --platform gitlab --write
+engagement-harness ci templates --platform azure-devops --no-print
+```
+
+Options:
+- `--platform <name>` — `github | gitlab | azure-devops | bitbucket`
+- `--context <mode>` — `client | source | auto` (where to write the template)
+- `--write` — write template to the correct path in the repository
+- `--no-print` — suppress stdout output (use with `--write`)
+
+---
+
+### `eval`
+
+Run the eval suite against fixture cases.
+
+```bash
+engagement-harness eval
+```
+
+Requires eval fixture cases in the `packages/eval/` directory.
+
+---
+
+### `feedback <subcommand>`
+
+Feedback ingestion utilities.
+
+```bash
+# Collect reactions from GitHub (auto-detects repo from git remote)
+engagement-harness feedback collect
+
+# Collect with explicit options
+engagement-harness feedback collect --repo owner/repo --pr 42
+engagement-harness feedback collect --repo owner/repo --days 30
+engagement-harness feedback collect --repo owner/repo --since 2026-01-01
+
+# Import feedback from a JSON file
+engagement-harness feedback import feedback.json
+
+# Print a metrics report
+engagement-harness feedback report
+engagement-harness feedback report --format json
+
+# Print a pilot program summary
+engagement-harness feedback pilot-report --days 30
+```
+
+---
+
+## Global Options
+
+```bash
+engagement-harness --version   # output version
+engagement-harness --help      # display help
+engagement-harness help <cmd>  # display help for a subcommand
+```
+
+---
+
+## Source Layout
+
+```
+src/
+├── index.ts                    # Commander program builder and entry point
+├── commands/
+│   ├── init.ts                 # init command
+│   ├── uninit.ts               # uninit command
+│   ├── doctor.ts               # doctor command
+│   ├── review.ts               # review command
+│   ├── remediate.ts            # remediate command
+│   ├── report.ts               # report subcommands
+│   ├── config-validate.ts      # config validate
+│   ├── agents-list.ts          # agents list
+│   ├── models-list.ts          # models list
+│   ├── models-validate.ts      # models validate
+│   ├── ci-templates.ts         # ci templates
+│   ├── eval.ts                 # eval command
+│   ├── feedback-collect.ts     # feedback collect
+│   ├── feedback-import.ts      # feedback import
+│   ├── feedback-report.ts      # feedback report
+│   └── feedback-pilot-report.ts # feedback pilot-report
+├── utils/
+│   ├── git.ts                  # git utilities (getRepoRoot, getRemoteUrl)
+│   └── errors.ts               # CliError class
+└── pricing.ts                  # cost estimation utilities
+```

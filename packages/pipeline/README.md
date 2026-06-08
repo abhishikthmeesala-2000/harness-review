@@ -1,86 +1,14 @@
 # @engagement-harness/pipeline
 
-Seven-stage finding processing pipeline for Engagement Harness. Transforms raw `CandidateFinding[]` from agents into verified, scored, deduplicated `Finding[]` with a policy decision.
+Seven-stage finding processing pipeline for Engagement Harness. Transforms raw `CandidateFinding[]` from agents into verified, scored, deduplicated, quality-gated `Finding[]` with a `PolicyDecision`.
 
 ---
 
-## Key Modules
+## Installation
 
-| File | Purpose |
-|---|---|
-| `src/pipeline.ts` | `FindingPipeline` — orchestrates all stages |
-| `src/evidence-scorer.ts` | `EvidenceScorer` — grades diff grounding |
-| `src/verifier.ts` | `Verifier` — heuristic quality checks (stage 3) |
-| `src/truth-verifier-agent.ts` | `TruthVerifierAgent` — LLM second-pass verifier with `claimAddressed` field |
-| `src/truth-verifier-stage.ts` | `TruthVerifierStage` — applies three safety guards (stage 3.5) |
-| `src/claim-types.ts` | `detectClaimType()` — infers claim type from title/sourceAgent/dimension |
-| `src/verifier-prompts.ts` | `getClaimTypeInstructions()` — per-claim-type accept/reject criteria |
-| `src/finding-tracker.ts` | `FindingTracker` — delta tracking: new / outstanding / resolved |
-| `src/confidence-scorer.ts` | `ConfidenceScorer` — weighted confidence + rollup |
-| `src/deduplicator.ts` | `Deduplicator` — best-finding per key |
-| `src/quality-gate.ts` | `QualityGate` — threshold filtering |
-| `src/policy-engine.ts` | `PolicyEngine` — final policy decision |
-| `src/types.ts` | `PipelineResult`, `PipelineMetrics`, `RejectedEntry`, `EvidenceLevel` |
-
----
-
-## Key Exported Types
-
-```typescript
-export type EvidenceLevel = 'none' | 'weak' | 'medium' | 'strong';
-
-export interface PipelineResult {
-  published: Finding[];
-  rejected: RejectedEntry[];
-  decision: PolicyDecision;
-  dimensionConfidence: Record<string, number>;
-  overallConfidence: number;
-  metrics: PipelineMetrics;
-}
-
-export interface PipelineMetrics {
-  totalCandidates: number;
-  publishedCount: number;
-  rejectedByStage: Record<string, number>;
-  verifierApprovalRate: number;
-  evidenceDistribution: Record<EvidenceLevel, number>;
-}
-
-export interface RejectedEntry {
-  finding: CandidateFinding;
-  reason: string;
-  stage: string;
-}
+```bash
+pnpm add @engagement-harness/pipeline
 ```
-
----
-
-## Pipeline Stages
-
-| Stage | What it does | Rejection reason |
-|---|---|---|
-| 1. Schema validation | Validates against `CandidateFindingSchema` | Invalid schema |
-| 2. Evidence scoring | Grades evidence grounding: strong/medium/weak/none | — |
-| 3. Verification | File in diff, evidence non-empty, fix non-generic | Verifier rejected |
-| 3.5. LLM truth verifier | Claim-type-aware second pass; three safety guards (critical bypass, unaddressed claim, high+low-confidence) | truth-verifier rejected |
-| 4. Confidence calibration | Computes `[0,1]` confidence score; upgrades to `Finding` | — |
-| 5. Deduplication | Keeps highest-confidence per `file::lineStart::dimension` | Duplicate |
-| 6. Quality gate | Filters by `confidenceThreshold` and `severityThreshold` | Below threshold |
-| 7. Policy decision | Computes `PolicyDecision`; attaches rollup metrics | — |
-
-### Confidence Scoring Weights
-
-| Factor | Delta |
-|---|---|
-| Base score | +0.5 |
-| Strong evidence | +0.2 |
-| Medium evidence | +0.1 |
-| Weak evidence | −0.2 |
-| No evidence | −0.4 |
-| Verifier approved | +0.1 |
-| Verifier rejected | −0.3 |
-| Client rule reference | +0.1 |
-| High `falsePositiveRisk` | −0.1 |
 
 ---
 
@@ -88,18 +16,124 @@ export interface RejectedEntry {
 
 ```typescript
 import { FindingPipeline } from '@engagement-harness/pipeline';
-import type { CandidateFinding, ContextBundle, Config } from '@engagement-harness/core';
 
-const pipeline = new FindingPipeline();
-const result = await pipeline.process(candidates, bundle, config);
+const pipeline = new FindingPipeline({ config });
+const result = await pipeline.run(candidateFindings, contextBundle, provider);
+```
 
-console.log(result.decision);        // 'approved' | 'approved_with_warnings' | ...
-console.log(result.published);       // Finding[]
-console.log(result.metrics);         // PipelineMetrics
+`provider` is optional. When provided, Stage 3.5 (LLM truth verifier) runs.
+
+---
+
+## The Seven Stages
+
+| Stage | Name | What it does |
+|---|---|---|
+| 1 | **Schema Validation** | `CandidateFindingSchema.safeParse()` — rejects malformed findings |
+| 2 | **Evidence Scoring** | Assigns `EvidenceLevel` per finding: `none \| weak \| medium \| strong` |
+| 3 | **Heuristic Verification** | Schema-level rules per claim type (no API call) |
+| 3.5 | **LLM Truth Verifier** | Claim-type-aware LLM re-verification (optional, requires provider) |
+| 4 | **Confidence Calibration** | Computes 0–1 confidence score; promotes `CandidateFinding → Finding` |
+| 5 | **Deduplication** | Keeps highest-confidence finding per `file::lineStart::dimension` key |
+| 6 | **Quality Gate** | Filters by confidence threshold and severity threshold |
+| 7 | **Policy Decision** | `PolicyEngine.decide()` → `PolicyDecision` |
+
+---
+
+## Evidence Scoring
+
+```typescript
+type EvidenceLevel = 'none' | 'weak' | 'medium' | 'strong';
+```
+
+| Level | Condition |
+|---|---|
+| `strong` | Verbatim diff line ≥ 10 chars appears in evidence |
+| `medium` | File path reference, diff keywords, or code identifiers from evidence match diff lines |
+| `weak` | Default fallback — evidence present but not strongly tied to diff |
+| `none` | No evidence field or empty evidence |
+
+---
+
+## Confidence Calibration
+
+Base score: `0.5`
+
+| Condition | Delta |
+|---|---|
+| Evidence: `strong` | +0.2 |
+| Evidence: `medium` | +0.1 |
+| Evidence: `weak` | -0.2 |
+| Evidence: `none` | -0.4 |
+| Verifier approved | +0.1 |
+| Verifier rejected | -0.3 |
+| Client rule referenced | +0.1 |
+| High false-positive risk pattern | -0.1 |
+
+---
+
+## Quality Gate Threshold Adjustments
+
+Base threshold: `config.review.confidenceThreshold` (default `0.8`)
+
+| File type | Adjustment |
+|---|---|
+| Config files | +0.1 |
+| Test files | -0.2 |
+| Frontend files | -0.2 |
+| `high` severity | -0.1 |
+
+Safety guards (findings that always pass):
+- `critical` severity → always published
+- `high` severity with confidence < 0.7 → published regardless of threshold
+
+---
+
+## Pipeline Result
+
+```typescript
+interface PipelineResult {
+  published: Finding[];
+  rejected: RejectedEntry[];
+  decision: PolicyDecision;          // approved | approved_with_warnings | needs_manual_review | blocked_by_policy
+  dimensionConfidence: Record<string, number>;
+  overallConfidence: number;
+  metrics: PipelineMetrics;
+}
+
+interface PipelineMetrics {
+  totalCandidates: number;
+  publishedCount: number;
+  rejectedByStage: Record<string, number>;
+  verifierApprovalRate: number;
+  truthVerifierApprovalRate?: number;
+  evidenceDistribution: Record<EvidenceLevel, number>;
+}
 ```
 
 ---
 
-## Dependencies
+## Delta Tracking
 
-- `@engagement-harness/core` — `Finding`, `CandidateFinding`, `Config`, `ContextBundle`, schemas
+```typescript
+import { FindingTracker } from '@engagement-harness/pipeline';
+
+const tracker = new FindingTracker({ storePath: '.engagement-harness/findings.json' });
+const delta = tracker.computeDelta(previousRun, currentRun);
+// delta: { new: Finding[], outstanding: Finding[], resolved: Finding[] }
+await tracker.save(currentRun);
+```
+
+Fingerprint format: `file::category::title::severity` (line-agnostic — shifted code doesn't re-fire old findings).
+
+---
+
+## Claim Types
+
+The pipeline detects the claim type of each finding to apply type-appropriate verification:
+
+```typescript
+type ClaimType = 'bug' | 'security' | 'missing-test' | 'intent-gap' | 'architecture' | 'performance' | 'quality';
+```
+
+The LLM truth verifier uses the detected claim type to avoid cross-type evidence misuse (e.g., a bug claim is never rejected because "tests exist").

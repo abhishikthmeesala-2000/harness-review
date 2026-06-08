@@ -1,224 +1,255 @@
 # Contributing to Engagement Harness
 
-Thank you for contributing. This document covers development setup, how to add new agents and CLI commands, testing requirements, and the pull request process.
+Thank you for contributing. This document covers development setup, how to add agents and CLI commands, testing requirements, and the pull request process.
 
 ---
 
 ## Development Setup
 
-**Requirements:** Node.js ≥ 20, pnpm
+### Prerequisites
+
+- Node.js ≥ 20
+- pnpm (`npm install -g pnpm`)
+- An Anthropic or OpenAI API key (optional — mock provider works for most development)
+
+### Clone and Build
 
 ```bash
 git clone https://github.com/abhishikthmeesala-2000/harness-review.git
 cd harness-review
-pnpm install       # install all workspace dependencies
-pnpm build         # compile all packages (TypeScript project references)
-pnpm test          # run Vitest test suite
-pnpm typecheck     # type-check without emitting output
-pnpm lint          # ESLint all package sources
-pnpm format        # Prettier all package sources
-pnpm format:check  # verify formatting without writing
+pnpm install
+pnpm build
 ```
 
-### Watch mode
+### Link the CLI Globally
 
 ```bash
-pnpm test:watch    # Vitest in watch mode — re-runs on file change
+cd packages/cli
+npm link
+cd ../..
+```
+
+> **Note:** `pnpm link --global` (no-argument form) was removed in pnpm v11. Use `npm link` from the CLI package directory instead.
+
+Verify the link:
+
+```bash
+engagement-harness --help
+```
+
+### Development Scripts
+
+```bash
+pnpm build         # compile all packages (TypeScript project references)
+pnpm build:clean   # clean and recompile from scratch
+pnpm test          # run all Vitest tests
+pnpm test:watch    # run tests in watch mode
+pnpm typecheck     # type-check without emitting
+pnpm lint          # ESLint all package sources
+pnpm format        # Prettier all package sources
+pnpm format:check  # check formatting without writing
 ```
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```
 packages/
-├── core/         Schemas, config, context engine, secret redaction, ALM interface
-├── providers/    Provider interface, MockProvider, AnthropicProvider, OpenAIProvider
-├── agents/       BaseAgent, 9 agent implementations, orchestrator, router
-├── pipeline/     7-stage FindingPipeline
-├── reports/      JSON, Markdown, HTML report renderers
-├── feedback/     Reaction collection, metrics storage, deduplication
-├── ci/           GitHubCommenter
-├── eval/         Eval runner, case schema, feedback importer
-└── cli/          Commander.js entry point, all command files
+├── core/       Zod schemas, config loader, ContextEngine, SecretRedactor, ALM adapters
+├── providers/  MockProvider, AnthropicProvider, OpenAIProvider, ProviderRegistry
+├── agents/     BaseAgent, 9 specialist agents, AgentOrchestrator, ModelRouter
+├── pipeline/   FindingPipeline (7 stages), EvidenceScorer, TruthVerifierAgent,
+│               ConfidenceScorer, Deduplicator, QualityGate, PolicyEngine, FindingTracker
+├── reports/    ReportGenerator, JSON/Markdown/HTML renderers
+├── feedback/   ReactionCollector, FeedbackStore, MetricsCalculator
+├── eval/       EvalRunner, EvalCase schema, FeedbackImporter
+├── ci/         GitHubCommenter (inline diff + summary comments)
+└── cli/        Commander.js entry point, all command implementations
 ```
 
-Each package has its own `package.json`, `tsconfig.json`, and `src/` directory. TypeScript project references (`tsc -b`) compile the full workspace; individual packages are not built separately.
+Each package is a TypeScript project reference target (`tsconfig.json` extends `../../tsconfig.base.json`). Tests live alongside source files with `.test.ts` suffix.
 
 ---
 
-## How to Add a New Agent
+## Adding a New Agent
 
-### 1. Create the agent file
+### Step 1: Create the agent file
 
-Create `packages/agents/src/<agent-id>.ts`. The agent ID must be kebab-case and unique.
+```
+packages/agents/src/my-agent.ts
+```
+
+Extend `BaseAgent` and implement `buildPrompt()` and `getAgentDimension()`:
 
 ```typescript
+import { BaseAgent } from './base-agent.js';
 import type { ContextBundle } from '@engagement-harness/core';
-import { BaseAgent } from './base.js';
-import { FINDING_SCHEMA_BLOCK, renderDiffSummary, renderFileContext } from './prompt-utils.js';
 
-export class MyNewAgent extends BaseAgent {
-  readonly id = 'my-agent';
-  readonly dimension = 'my-dimension';
-  readonly description = 'One sentence description of what this agent checks.';
+export class MyAgent extends BaseAgent {
+  getAgentDimension(): string {
+    return 'my-dimension';
+  }
 
-  promptTemplate(context: ContextBundle): string {
-    return [
-      'You are the MyNew agent for the Engagement Harness.',
-      `Dimension: ${this.dimension}`,
-      '',
-      'ROLE',
-      'Identify REAL issues with high confidence. Be CONSERVATIVE.',
-      '',
-      'WHAT TO CHECK',
-      '1. Pattern to look for...',
-      '   Mitigating factors: ...',
-      '',
-      FINDING_SCHEMA_BLOCK,
-      '',
-      renderDiffSummary(context),
-      renderFileContext(context),
-    ].join('\n');
+  buildPrompt(context: ContextBundle): string | null {
+    // return null to short-circuit (no API call made)
+    if (context.changedFiles.length === 0) return null;
+    return `...your system prompt...`;
   }
 }
 ```
 
-The `Dimension: <dimension>` line is required — `MockProvider`'s deterministic fixture map keys off it.
+### Step 2: Register in the orchestrator
 
-### 2. Export from the agents package
-
-Add to `packages/agents/src/index.ts`:
+In `packages/agents/src/orchestrator.ts`, add to `AGENT_FACTORIES`:
 
 ```typescript
-export { MyNewAgent } from './my-new-agent.js';
+'my-agent': (config) => new MyAgent(config),
 ```
 
-### 3. Register in the orchestrator
+And add to `DEFAULT_AGENT_IDS`:
 
-Add to `packages/agents/src/orchestrator.ts` — import the class and add it to the agent map.
+```typescript
+export const DEFAULT_AGENT_IDS = [
+  'reviewer', 'security', /* ... */ 'my-agent',
+];
+```
 
-### 4. Add the agent ID to core schemas
+### Step 3: Add tests
 
-Add `'my-agent'` to the `DEFAULT_AGENT_IDS` array in `packages/core/src/schemas/config.ts`.
+Create `packages/agents/src/my-agent.test.ts`. Tests must cover:
+- Normal finding output (valid JSON array)
+- Short-circuit condition (returns `null` when applicable)
+- Extended thinking configuration (if used)
 
-### 5. Add a MockProvider fixture
+### Agent short-circuit patterns
 
-Add a fixture for `'my-dimension'` in `packages/providers/src/mock.ts` — the deterministic fixture map is keyed by the dimension string that appears in the prompt.
-
-### 6. Add an eval case
-
-Create a directory under `packages/eval/src/cases/my-agent-test/` with:
-- `case.json` — eval case definition using `EvalCaseSchema`
-- `diff.patch` — a synthetic unified diff that should trigger a finding
-
-### 7. Write tests
-
-Add unit tests in `packages/agents/src/__tests__/my-new-agent.test.ts` or in the same directory.
+Return `null` from `buildPrompt()` to skip the provider call entirely:
+- No relevant files: `if (!hasMigrationFiles(context)) return null`
+- Insufficient diff: `if (context.changedLines < 20) return null`
+- Missing metadata: `if (!context.prMetadata) return null`
+- No rule files: `if (context.ruleFiles.length === 0) return null`
 
 ---
 
-## How to Add a New CLI Command
+## Adding a New CLI Command
 
-### 1. Create the command file
+### Create the command file
 
-Create `packages/cli/src/commands/my-command.ts`:
+```
+packages/cli/src/commands/my-command.ts
+```
 
 ```typescript
-export interface MyCommandOptions {
-  flag?: boolean;
-}
+import { Command } from 'commander';
 
-export async function myCommand(options: MyCommandOptions): Promise<void> {
-  // implementation
+export function createMyCommand(): Command {
+  return new Command('my-command')
+    .description('What it does')
+    .option('--flag <value>', 'Flag description')
+    .action(async (options) => {
+      // implementation
+    });
 }
 ```
 
-### 2. Register in the CLI index
+### Register in the program
 
-In `packages/cli/src/index.ts`, import and attach to the Commander program:
+In `packages/cli/src/index.ts`, import and add:
 
 ```typescript
-import { myCommand, type MyCommandOptions } from './commands/my-command.js';
-
-// inside buildProgram():
-program
-  .command('my-command')
-  .description('What this command does')
-  .option('--flag', 'Optional flag')
-  .action(async (options: MyCommandOptions) => {
-    await myCommand(options);
-  });
+import { createMyCommand } from './commands/my-command.js';
+program.addCommand(createMyCommand());
 ```
 
-### 3. Update the CLI README
+### Add tests
 
-Add the new command to `packages/cli/README.md` and to the CLI Reference section of `README.md`.
+Create `packages/cli/src/commands/my-command.test.ts` using Vitest. Mock external dependencies with `vi.mock()`. See existing command tests for patterns.
+
+---
+
+## Adding a Pipeline Stage
+
+The pipeline is defined in `packages/pipeline/src/pipeline.ts`. Stages run sequentially; each receives the output of the previous stage.
+
+To add a stage:
+1. Create `packages/pipeline/src/my-stage.ts` with a class that has a `run(findings, context)` method
+2. Add it to the pipeline sequence in `pipeline.ts`
+3. Add any new metrics fields to `PipelineMetrics` in `packages/pipeline/src/types.ts`
+4. Write tests covering pass-through, rejection, and edge cases
 
 ---
 
 ## Testing
 
-Engagement Harness uses **Vitest** for all tests.
+All code contributions must include Vitest tests. The project uses Vitest 2.x with coverage via `@vitest/coverage-v8`.
 
 ```bash
-pnpm test           # run all tests once
-pnpm test:watch     # watch mode
+pnpm test              # run all tests once
+pnpm test:watch        # watch mode during development
 ```
 
-### Coverage targets
+**Test conventions:**
+- Test files: `src/**/*.test.ts` (co-located with source)
+- Use `vi.mock()` for external dependencies (file system, network, providers)
+- Agent tests: verify both normal output and short-circuit conditions
+- Pipeline tests: test each stage in isolation and as part of the full pipeline
+- CLI tests: mock provider calls; test command parsing and output
 
-- All new public functions and classes should have unit tests
-- New agent implementations must have at least one eval case
-- Pipeline stages should have unit tests covering the rejection and pass-through paths
+**Do not mock the database or real provider responses when the behavior under test depends on them.** Use `MockProvider` from `packages/providers/src/` for provider interactions in agent and pipeline tests.
 
-### Test patterns
+---
 
-- Unit tests live alongside source files in the same `src/` directory (e.g., `generator.test.ts` next to `generator.ts`)
-- Integration tests use the eval runner — see `packages/eval/src/runner.integration.test.ts`
-- Use `packages/reports/src/test-fixtures.ts` and `packages/agents/src/test-helpers.ts` for shared test data factories
+## Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+type(scope): description
+
+feat(agents): add specialist personas with extended thinking
+fix(ci): upsert summary comment instead of posting new each run
+docs(readme): update test count badge to 566
+test(cli): fix review.test.ts mock to serve [] for issue-comments GET
+chore: apply prettier formatting repo-wide
+```
+
+Types: `feat`, `fix`, `docs`, `test`, `chore`, `refactor`, `perf`
+
+Scopes: `agents`, `pipeline`, `providers`, `ci`, `cli`, `core`, `feedback`, `eval`, `reports`
 
 ---
 
 ## Pull Request Process
 
-1. Fork the repository and create a branch from `main`
-2. Make your changes following the code style requirements below
-3. Run `pnpm build && pnpm test && pnpm typecheck && pnpm lint` — all must pass
-4. Open a pull request against `main` with a clear description of the change
-5. Add an entry to `CHANGELOG.md` under `[Unreleased]`
+1. **Branch** from `main`:
+   ```bash
+   git checkout -b feat/my-feature
+   ```
 
----
+2. **Make changes** with tests. Run the full suite before pushing:
+   ```bash
+   pnpm test && pnpm typecheck && pnpm lint
+   ```
 
-## Commit Message Format
+3. **Open a PR** against `main`. The PR description should explain *why* the change is needed, not just what changed.
 
-We use [Conventional Commits](https://www.conventionalcommits.org/):
+4. **CI must pass**: all 58 test files, TypeScript compilation, and ESLint.
 
-```
-<type>(<scope>): <short summary>
-
-[optional body]
-```
-
-**Types:** `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `ci`
-
-**Examples:**
-
-```
-feat(agents): add performance-profiling agent
-fix(pipeline): correct confidence rollup for zero-finding result
-docs(feedback): add reaction emoji table to FEEDBACK_SYSTEM.md
-test(eval): add eval case for domain-policy with no matching rules
-```
+5. **One approval required** from a maintainer before merge.
 
 ---
 
 ## Code Style
 
-- **TypeScript strict mode** — all packages use `"strict": true`
-- **No `any`** — `@typescript-eslint/no-explicit-any` is set to `warn`; avoid it in new code
-- **No comments that describe what code does** — use well-named identifiers; only add a comment when the WHY is non-obvious
-- **No TODO comments** in committed code — open an issue instead
-- **Prettier** for formatting — run `pnpm format` before committing
-- **ESLint** for linting — run `pnpm lint` before committing
-- **Imports** use `.js` extensions (ESM with TypeScript project references)
+- **TypeScript strict mode** — no `any`, no `// @ts-ignore`
+- **No comments on obvious code** — well-named identifiers document themselves
+- **Comment only the WHY** — hidden constraints, subtle invariants, workarounds for specific bugs
+- **No placeholder TODOs** — if something is incomplete, don't merge it
+- Formatting is enforced by Prettier; run `pnpm format` before committing
+
+---
+
+## Questions
+
+Open a [GitHub Discussion](https://github.com/abhishikthmeesala-2000/harness-review/discussions) or file an issue with the `question` label.

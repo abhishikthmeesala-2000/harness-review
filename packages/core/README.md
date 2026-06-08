@@ -4,94 +4,146 @@ Foundation layer for Engagement Harness. Provides Zod schemas, config loading, r
 
 ---
 
-## Key Modules
+## Installation
 
-| Module | Path | Purpose |
-|---|---|---|
-| Schemas | `src/schemas/` | Zod definitions for `Config`, `Finding`, `CandidateFinding`, `PolicyDecision` |
-| ConfigLoader | `src/config/loader.ts` | Read/validate/write `.engagement-harness/config.json` |
-| RepoProfiler | `src/profile/profiler.ts` | Detect language, framework, test framework, CI provider |
-| GitDiffParser | `src/git/diff-parser.ts` | Parse unified diff into `FileDiff[]` via simple-git |
-| ContextEngine | `src/context/engine.ts` | Build `ContextBundle` from diff + repo file content |
-| SecretRedactor | `src/redaction/redactor.ts` | Strip secrets from bundles before agent prompts |
-| ALM interface | `src/alm/` | `AlmAdapter` interface + GitHub/GitLab/Azure/Bitbucket/none implementations |
+```bash
+pnpm add @engagement-harness/core
+```
+
+This package has no dependencies on other `@engagement-harness/*` packages. All other packages depend on it.
 
 ---
 
-## Key Exported Types
+## Key Exports
+
+### Config
 
 ```typescript
-// Config schema
-export type Config = z.infer<typeof ConfigSchema>;
-export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
-export type AlmPlatform = 'github' | 'gitlab' | 'azure-devops' | 'bitbucket' | 'none';
-export const DEFAULT_AGENT_IDS: readonly string[];
-export function defaultConfig(client: { name: string; engagement: string }): Config;
+import { loadConfig, ConfigSchema, defaultConfig } from '@engagement-harness/core';
 
-// Findings
-export type FindingCategory = 'correctness' | 'security' | 'testing' | 'domain-policy' | 'design' | 'data' | 'observability' | 'intent-gap';
-export type FindingSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type FalsePositiveRisk = 'low' | 'medium' | 'high';
-export type VerificationStatus = 'approved' | 'rejected' | 'pending';
-export interface Finding { /* ... */ }
-export interface CandidateFinding { /* ... */ }
+// Load and validate config.json from .engagement-harness/config.json
+const config = await loadConfig('/path/to/repo');
 
-// Context
-export interface ContextBundle {
-  entries: ContextEntry[];
-  diff: FileDiff[];
-  repoProfile: RepoProfile;
-  prMetadata?: PrMetadata;
-  runMetadata: RunMetadata;
-}
-export interface ContextEntry {
-  path: string;
-  content: string;
-  reason: string;
-  priority: number;
-  kind: 'changed-file' | 'imported-by' | 'imports' | 'test' | 'rule';
-}
+// Get the full Zod schema (for validation, type inference)
+type Config = z.infer<typeof ConfigSchema>;
 
-// Diff
-export interface FileDiff {
-  path: string;
-  oldPath?: string;
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'binary';
-  hunks: DiffHunk[];
-}
+// Generate a default config (all 9 agents on mock, anthropic model set)
+const defaults = defaultConfig();
+```
 
-// ALM
-export abstract class AlmAdapter {
-  abstract postSummary(prRef: PrRef, markdown: string): Promise<void>;
-  abstract postInlineComment(prRef: PrRef, commitSha: string, file: string, line: number, body: string): Promise<void>;
-  abstract updateCheckStatus(prRef: PrRef, status: string, summary: string): Promise<void>;
+**Config shape** (all fields are optional except `client.name` and `client.engagement`):
+
+```typescript
+interface Config {
+  client: { name: string; engagement: string };
+  review: {
+    confidenceThreshold: number;         // 0–1, default: 0.8
+    severityThreshold: Severity;         // default: 'low'
+    requireVerifierApproval: boolean;    // default: true
+  };
+  agents: { enabled: string[] };
+  models: Record<string, string>;
+  providers: {
+    mock?: {};
+    anthropic?: { model: string; maxTokens?: number; temperature?: number };
+    openai?: { model: string; maxTokens?: number; temperature?: number };
+  };
+  context: { ignoredPaths: string[]; maxFiles: number; maxTokens: number };
+  ci: { blockOnPolicy: boolean; postComments: boolean; artifactsOnly: boolean };
+  alm: { platform: 'github' | 'gitlab' | 'azure-devops' | 'bitbucket' | 'none' };
+  feedback: { enabled: boolean; autoCollect: boolean; retentionDays?: number };
+  reports: { formats: ReportFormat[]; outputDir: string };
 }
 ```
 
 ---
 
-## Usage
+### ContextEngine
+
+Builds the `ContextBundle` passed to agents. Runs git diff, resolves imports, strips secrets.
 
 ```typescript
-import { ConfigLoader, ContextEngine, SecretRedactor } from '@engagement-harness/core';
+import { ContextEngine } from '@engagement-harness/core';
 
-// Load config
-const loader = new ConfigLoader('/path/to/repo');
-const config = await loader.load();
+const engine = new ContextEngine({ repoPath: '/path/to/repo', config });
+const bundle = await engine.build({ baseRef: 'main', headRef: 'HEAD' });
+```
 
-// Build context bundle
-const engine = new ContextEngine('/path/to/repo');
-const bundle = await engine.build(diff, config, runMetadata, prMetadata);
+**`ContextBundle` shape:**
 
-// Redact secrets
+```typescript
+interface ContextBundle {
+  changedFiles: ChangedFile[];     // files with diff hunks
+  importedContext: ImportedFile[]; // imports/exports from changed files
+  testFiles: string[];             // test file paths co-located with changes
+  ruleFiles: RuleFile[];           // .engagement-harness/rules/*.md content
+  prMetadata?: {                   // present only in CI mode
+    title: string;
+    body: string;
+    number: number;
+  };
+  repoProfile: RepoProfile;        // language, framework, test runner detection
+}
+```
+
+---
+
+### SecretRedactor
+
+Strips secrets from context before it reaches agents or providers.
+
+```typescript
+import { SecretRedactor } from '@engagement-harness/core';
+
 const redactor = new SecretRedactor();
-const safeBundle = redactor.redactBundle(bundle);
+const safeContent = redactor.redact(rawDiffContent);
+```
+
+Redacts: API keys, connection strings with passwords, PEM private key blocks, high-entropy strings adjacent to known key names.
+
+---
+
+### Finding Schemas
+
+```typescript
+import {
+  CandidateFindingSchema,
+  FindingSchema,
+  FindingSeverity,
+  FindingCategory,
+} from '@engagement-harness/core';
+
+type CandidateFinding = z.infer<typeof CandidateFindingSchema>;
+type Finding = z.infer<typeof FindingSchema>;
+type Severity = 'low' | 'medium' | 'high' | 'critical';
 ```
 
 ---
 
-## Dependencies
+### ALM Adapter
 
-- `zod` — schema validation
-- `simple-git` — git diff and log operations
-- `micromatch` — glob pattern matching for `ignoredPaths` and rule file frontmatter
+```typescript
+import { createAlmAdapter } from '@engagement-harness/core';
+
+const alm = createAlmAdapter(config.alm.platform, {
+  token: process.env.GITHUB_TOKEN,
+  repo: 'owner/repo',
+  prNumber: 42,
+});
+```
+
+Supported platforms: `github`, `gitlab`, `azure-devops`, `bitbucket`, `none`.
+
+---
+
+## Source Layout
+
+```
+src/
+├── schemas/          CandidateFindingSchema, FindingSchema, ConfigSchema
+├── config/           loadConfig(), defaultConfig(), config-schema
+├── context/          ContextEngine, ContextBundle, ChangedFile types
+├── profile/          RepoProfile detection (language, framework, test runner)
+├── redaction/        SecretRedactor
+└── alm/              ALM adapter interface and platform implementations
+```
