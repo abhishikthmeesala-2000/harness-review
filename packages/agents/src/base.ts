@@ -70,7 +70,14 @@ export abstract class BaseAgent {
 
     const parsed = extractJsonArray(raw);
     if (!parsed) {
-      console.warn(chalk.yellow(`[agent:${this.id}] could not parse JSON array from response`));
+      // Reached only when the response contains '[' but bracket-extraction
+      // still fails (e.g. unbalanced brackets). Surface the raw text so the
+      // failure is diagnosable.
+      console.warn(
+        chalk.yellow(
+          `[agent:${this.id}] could not parse JSON array from response: ${raw.slice(0, 200)}`,
+        ),
+      );
       return [];
     }
 
@@ -112,13 +119,12 @@ export function supportsExtendedThinking(model: string | undefined): boolean {
   return lower.includes('opus') || lower.includes('sonnet');
 }
 
-// Maps common "no findings" natural-language responses to "[]" so extractJsonArray
-// can return an empty array instead of null when the model ignores the Return [] instruction.
+// Maps "no findings" responses to "[]" so extractJsonArray returns an empty array
+// instead of null when the model returns prose instead of the instructed JSON array.
+// Any response with no '[' cannot be a valid JSON array, so we normalise it to [].
 function normalizeEmptyResponse(raw: string): string {
-  const t = raw.trim().toLowerCase();
-  if (!t.includes('[') && (t === '' || /^(no |none\b|nothing\b|clean\b)/.test(t))) {
-    return '[]';
-  }
+  const t = raw.trim();
+  if (!t.includes('[')) return '[]';
   return raw;
 }
 
