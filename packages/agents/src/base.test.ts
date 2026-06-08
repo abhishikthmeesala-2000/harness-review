@@ -102,11 +102,20 @@ describe('BaseAgent.run', () => {
     warnSpy.mockRestore();
   });
 
-  it('returns [] and warns when no JSON array can be found', async () => {
+  it('returns [] silently when response contains no [ (prose "no findings")', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const result = await new StubAgent().run(makeBundle(), fakeProvider('not json at all'));
     expect(result).toEqual([]);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it('returns [] and warns when response contains [ but cannot be parsed as JSON array', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await new StubAgent().run(makeBundle(), fakeProvider('here is some [unclosed bracket'));
+    expect(result).toEqual([]);
     expect(warnSpy).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('[unclosed bracket'));
     warnSpy.mockRestore();
   });
 
