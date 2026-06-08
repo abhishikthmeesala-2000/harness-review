@@ -228,18 +228,23 @@ const DEFAULT_FIXTURES: Record<string, string> = {
       remediationReadiness: 'ready',
     },
   ]),
-  // Remediation agent — returns JSON object (not array); remediate() extracts via {...} regex.
-  // Returns JSON object (not array) — RemediationAgent.remediate() extracts via /\{[\s\S]*\}/ regex.
+  // Remediation agent — returns JSON object (not array); remediate() extracts via /\{[\s\S]*\}/ regex.
   'dimension: remediation': JSON.stringify({
-    findingId: 'EH-MOCK-REM-1',
-    plan: '1. Add `requireAdmin()` middleware before the route handler.\n2. Deploy behind a feature flag and verify in staging before enabling in production.',
-    suggestedPatch:
-      '--- a/src/routes/admin.ts\n+++ b/src/routes/admin.ts\n@@ -1 +1 @@\n-app.post("/admin/delete", async (req, res) => {\n+app.post("/admin/delete", requireAdmin(), async (req, res) => {',
-    testRecommendations: [
-      'Send unauthenticated POST /admin/delete and assert HTTP 401.',
-      'Send authenticated POST /admin/delete with admin token and assert HTTP 200.',
-    ],
-    estimatedEffort: 'small',
+    findingId: 'EH-MOCK-SEC-1',
+    file: 'src/routes/admin.ts',
+    lineStart: 12,
+    lineEnd: 14,
+    before:
+      'app.post("/admin/delete", async (req, res) => {\n  await deleteUser(req.body.id);\n});',
+    after:
+      'app.post("/admin/delete", requireAdmin(), async (req, res) => {\n  await deleteUser(req.body.id);\n});',
+    explanation:
+      'Add requireAdmin() middleware to guard the destructive endpoint against unauthenticated callers.',
+    test: 'it("rejects unauthenticated DELETE", async () => {\n  const res = await request(app).post("/admin/delete");\n  expect(res.status).toBe(401);\n});',
+    riskLevel: 'low',
+    effort: 'minutes',
+    librariesNeeded: [],
+    additionalFiles: [],
   }),
 };
 

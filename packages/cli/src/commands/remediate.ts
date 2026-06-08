@@ -1,14 +1,21 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { ConfigLoader, type Finding } from '@engagement-harness/core';
-import { RemediationAgent } from '@engagement-harness/agents';
-import { ModelRouter } from '@engagement-harness/agents';
+import {
+  ModelRouter,
+  RemediationAgent,
+  loadRemediations,
+  saveRemediation,
+} from '@engagement-harness/agents';
+import type { RemediationOutput } from '@engagement-harness/agents';
+import { ConfigLoader } from '@engagement-harness/core';
+import type { Finding } from '@engagement-harness/core';
 import chalk from 'chalk';
 
-export interface RemediateOptions {
-  finding?: string;
-}
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 
 function getOutputDir(repoRoot: string): string {
   if (!ConfigLoader.exists(repoRoot)) return path.join(repoRoot, '.engagement-harness/reports');
@@ -36,12 +43,104 @@ function loadLatestFindings(repoRoot: string): Finding[] {
   }
 }
 
-export async function remediateCommand(options: RemediateOptions): Promise<void> {
-  if (!options.finding) {
-    console.error(chalk.red('--finding <id> is required'));
-    process.exit(1);
+interface TrackedFindingEntry {
+  finding: Finding;
+}
+
+function loadKnownFindings(repoRoot: string): Finding[] {
+  const knownPath = path.join(
+    repoRoot,
+    '.engagement-harness',
+    'findings',
+    'known-findings.json',
+  );
+  if (!existsSync(knownPath)) return [];
+  try {
+    const raw = JSON.parse(readFileSync(knownPath, 'utf8')) as TrackedFindingEntry[];
+    return Array.isArray(raw) ? raw.map((e) => e.finding) : [];
+  } catch {
+    return [];
+  }
+}
+
+function getAllFindings(repoRoot: string): Finding[] {
+  const known = loadKnownFindings(repoRoot);
+  if (known.length > 0) return known;
+  return loadLatestFindings(repoRoot);
+}
+
+const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+const RISK_LEVELS = ['low', 'medium', 'high'] as const;
+
+const SEVERITY_LABEL: Record<string, (s: string) => string> = {
+  critical: (s) => chalk.red(s),
+  high: (s) => chalk.yellow(s),
+  medium: (s) => chalk.cyan(s),
+  low: (s) => chalk.blue(s),
+};
+
+function printFinding(f: Finding, rem?: RemediationOutput): void {
+  const sevFn = SEVERITY_LABEL[f.severity] ?? ((s: string) => s);
+  const sev = sevFn(f.severity.toUpperCase().padEnd(8));
+  const remTag = rem
+    ? chalk.green(` [fix: ${rem.riskLevel} risk · ${rem.effort}]`)
+    : chalk.gray(' [no fix yet]');
+  console.log(`  ${sev} ${chalk.cyan(f.id)}  ${f.title}${remTag}`);
+  console.log(`           ${chalk.gray(f.file + ':' + f.lineStart + '–' + f.lineEnd)}`);
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: list
+// ---------------------------------------------------------------------------
+
+export async function remediateListCommand(): Promise<void> {
+  const repoRoot = process.cwd();
+  const findings = getAllFindings(repoRoot);
+  const remediations = loadRemediations(repoRoot);
+
+  if (findings.length === 0) {
+    console.log(chalk.yellow('\nNo findings found. Run `engagement-harness review` first.\n'));
+    return;
   }
 
+  const sorted = [...findings].sort(
+    (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
+  );
+
+  const withFix = sorted.filter((f) => remediations[f.id]);
+  const withoutFix = sorted.filter((f) => !remediations[f.id]);
+
+  console.log(chalk.bold(`\nFindings (${findings.length} total · ${withFix.length} with fixes):\n`));
+  for (const f of sorted) {
+    printFinding(f, remediations[f.id]);
+    console.log('');
+  }
+
+  if (withFix.length > 0) {
+    console.log(`To apply a fix:       ${chalk.cyan('engagement-harness remediate apply <id>')}`);
+  }
+  if (withoutFix.length > 0) {
+    console.log(
+      `To generate all fixes: ${chalk.cyan('engagement-harness remediate apply <id>')} (generates on demand)`,
+    );
+  }
+  console.log(
+    `To auto-fix low-risk:  ${chalk.cyan('engagement-harness remediate auto-fix --risk low')}\n`,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: apply
+// ---------------------------------------------------------------------------
+
+export interface ApplyOptions {
+  yes?: boolean;
+}
+
+export async function remediateApplyCommand(
+  findingId: string,
+  opts: ApplyOptions,
+): Promise<void> {
   const repoRoot = process.cwd();
 
   let config;
@@ -52,23 +151,25 @@ export async function remediateCommand(options: RemediateOptions): Promise<void>
     process.exit(1);
   }
 
-  const findings = loadLatestFindings(repoRoot);
-  const finding = findings.find((f) => f.id === options.finding);
+  const findings = getAllFindings(repoRoot);
+  const finding = findings.find((f) => f.id === findingId);
 
   if (!finding) {
     console.error(
-      chalk.red(`Finding "${options.finding}" not found in the latest report. Run a review first.`),
+      chalk.red(`Finding "${findingId}" not found. Run \`engagement-harness review\` first.`),
     );
     process.exit(1);
   }
 
-  const agent = new RemediationAgent();
-  const provider = ModelRouter.route('remediation', config);
+  const remediations = loadRemediations(repoRoot);
+  let output = remediations[findingId];
 
-  console.log(chalk.bold(`\nGenerating remediation plan for: ${finding.title}\n`));
-
-  try {
-    const plan = await agent.remediate(
+  // Generate on-demand if not yet stored
+  if (!output) {
+    console.log(chalk.bold(`\nGenerating fix for: ${finding.title}\n`));
+    const agent = new RemediationAgent();
+    const provider = ModelRouter.route('remediation', config);
+    output = await agent.remediate(
       finding,
       {
         entries: [],
@@ -86,22 +187,179 @@ export async function remediateCommand(options: RemediateOptions): Promise<void>
       },
       provider,
     );
+    saveRemediation(repoRoot, output);
+  }
 
-    console.log(`Finding: ${chalk.cyan(plan.findingId)}`);
-    console.log(`Effort:  ${chalk.yellow(plan.estimatedEffort)}`);
-    console.log(`\nPlan:\n${plan.plan}`);
-    if (plan.testRecommendations.length > 0) {
-      console.log(`\nTest recommendations:`);
-      plan.testRecommendations.forEach((t, i) => {
-        console.log(`  ${i + 1}. ${t}`);
-      });
-    }
-    if (plan.suggestedPatch) {
-      console.log(`\nSuggested patch:\n${plan.suggestedPatch}`);
-    }
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`Remediation failed: ${msg}`));
+  // Verify file exists
+  const absoluteFile = path.join(repoRoot, output.file);
+  if (!existsSync(absoluteFile)) {
+    console.error(chalk.red(`File not found on disk: ${output.file}`));
     process.exit(1);
+  }
+
+  const currentContent = readFileSync(absoluteFile, 'utf8');
+  const beforeFound = currentContent.includes(output.before);
+
+  if (!beforeFound) {
+    console.warn(
+      chalk.yellow(
+        `\nWarning: the BEFORE code was not found verbatim in ${output.file}.\n` +
+          `The file may have changed since the fix was generated. Review carefully.\n`,
+      ),
+    );
+  }
+
+  // Show diff
+  console.log(
+    chalk.bold(
+      `\nFix for ${chalk.cyan(findingId)}  [${output.riskLevel} risk · ${output.effort}]\n`,
+    ),
+  );
+  console.log(`File: ${chalk.gray(output.file + ':' + output.lineStart + '–' + output.lineEnd)}\n`);
+  console.log('BEFORE:');
+  for (const line of output.before.split('\n')) {
+    console.log(chalk.red(`  - ${line}`));
+  }
+  console.log('\nAFTER:');
+  for (const line of output.after.split('\n')) {
+    console.log(chalk.green(`  + ${line}`));
+  }
+  console.log(`\nExplanation:\n  ${output.explanation}`);
+  console.log(`\nTest to add:\n${chalk.gray(output.test)}`);
+
+  // Confirm
+  if (!opts.yes) {
+    const { confirm } = await import('@inquirer/prompts');
+    const ok = await confirm({ message: 'Apply this fix?' });
+    if (!ok) {
+      console.log(chalk.yellow('\nAborted.\n'));
+      return;
+    }
+  }
+
+  // Apply
+  const newContent = currentContent.replace(output.before, output.after);
+  if (newContent === currentContent) {
+    console.warn(
+      chalk.yellow('\nFix did not modify the file — BEFORE text was not matched. Apply manually.\n'),
+    );
+    return;
+  }
+
+  writeFileSync(absoluteFile, newContent, 'utf8');
+  console.log(chalk.green(`\n✓ Applied fix to ${output.file}`));
+
+  try {
+    execSync(`git add "${output.file}"`, { cwd: repoRoot, stdio: 'inherit' });
+    console.log(chalk.green(`✓ Staged ${output.file}`));
+  } catch {
+    console.warn(chalk.yellow('Could not git add — stage manually.'));
+  }
+
+  console.log(chalk.bold('\nNext: add the following test, then commit:\n'));
+  console.log(chalk.gray(output.test));
+  console.log('');
+}
+
+// ---------------------------------------------------------------------------
+// Subcommand: auto-fix
+// ---------------------------------------------------------------------------
+
+export interface AutoFixOptions {
+  risk: string;
+  yes?: boolean;
+}
+
+export async function remediateAutoFixCommand(opts: AutoFixOptions): Promise<void> {
+  const repoRoot = process.cwd();
+  const riskCeiling = opts.risk ?? 'low';
+
+  if (!(RISK_LEVELS as readonly string[]).includes(riskCeiling)) {
+    console.error(chalk.red(`--risk must be one of: ${RISK_LEVELS.join(', ')}`));
+    process.exit(1);
+  }
+
+  const remediations = loadRemediations(repoRoot);
+  const eligible = Object.values(remediations).filter((r) => {
+    return RISK_LEVELS.indexOf(r.riskLevel) <= RISK_LEVELS.indexOf(riskCeiling as 'low' | 'medium' | 'high');
+  });
+
+  if (eligible.length === 0) {
+    console.log(
+      chalk.yellow(`\nNo fixes at or below risk level "${riskCeiling}". Run \`remediate apply <id>\` to generate fixes first.\n`),
+    );
+    return;
+  }
+
+  console.log(
+    chalk.bold(`\n${eligible.length} fix(es) eligible (risk ≤ ${riskCeiling}):\n`),
+  );
+  for (const r of eligible) {
+    console.log(
+      `  ${chalk.cyan(r.findingId)}  ${r.file}:${r.lineStart}–${r.lineEnd}  [${r.riskLevel} · ${r.effort}]`,
+    );
+  }
+  console.log('');
+
+  if (!opts.yes) {
+    const { confirm } = await import('@inquirer/prompts');
+    const ok = await confirm({
+      message: `Apply all ${eligible.length} fix(es) and create a commit?`,
+    });
+    if (!ok) {
+      console.log(chalk.yellow('Aborted.\n'));
+      return;
+    }
+  }
+
+  const applied: string[] = [];
+
+  for (const output of eligible) {
+    const absoluteFile = path.join(repoRoot, output.file);
+    if (!existsSync(absoluteFile)) {
+      console.warn(chalk.yellow(`  Skipping ${output.findingId}: ${output.file} not found on disk.`));
+      continue;
+    }
+
+    const current = readFileSync(absoluteFile, 'utf8');
+    const patched = current.replace(output.before, output.after);
+    if (patched === current) {
+      console.warn(
+        chalk.yellow(`  Skipping ${output.findingId}: BEFORE text not matched in ${output.file}.`),
+      );
+      continue;
+    }
+
+    writeFileSync(absoluteFile, patched, 'utf8');
+    try {
+      execSync(`git add "${output.file}"`, { cwd: repoRoot });
+    } catch {
+      // ignore staging errors; commit will fail and we surface that instead
+    }
+    applied.push(output.findingId);
+    console.log(chalk.green(`  ✓ Applied ${output.findingId}`));
+  }
+
+  if (applied.length === 0) {
+    console.log(chalk.yellow('\nNo fixes were applied.\n'));
+    return;
+  }
+
+  const commitMsg = [
+    `fix: apply ${applied.length} engagement-harness remediation(s)`,
+    '',
+    'Fixed:',
+    ...applied.map((id) => `- ${id}`),
+    '',
+    `Applied by: engagement-harness remediate auto-fix --risk ${riskCeiling}`,
+  ].join('\n');
+
+  try {
+    execSync(`git commit -m ${JSON.stringify(commitMsg)}`, { cwd: repoRoot, stdio: 'inherit' });
+    console.log(chalk.green(`\n✓ Committed ${applied.length} fix(es).\n`));
+  } catch {
+    console.warn(
+      chalk.yellow('\nCommit failed — verify staged changes and commit manually.\n'),
+    );
   }
 }
