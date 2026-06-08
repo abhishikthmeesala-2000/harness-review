@@ -40,8 +40,8 @@ function reject(finding: CandidateFinding, reason: string): CandidateFinding {
   return { ...finding, verification: { status: 'rejected', reason } };
 }
 
-function approve(finding: CandidateFinding): CandidateFinding {
-  return { ...finding, verification: { status: 'approved', reason: 'Heuristic checks passed.' } };
+function approve(finding: CandidateFinding, reason = 'Heuristic checks passed.'): CandidateFinding {
+  return { ...finding, verification: { status: 'approved', reason } };
 }
 
 export const Verifier = {
@@ -61,7 +61,8 @@ export const Verifier = {
 
     const diffLines = allDiffLineContents(context);
     if (diffLines.length > 0 && !hasDiffEvidence(finding, diffLines)) {
-      return reject(finding, 'diff evidence content does not appear in diff hunks');
+      // Don't hard-reject paraphrased evidence — LLM verifier assesses grounding directly.
+      return approve(finding, 'Heuristic checks passed (diff evidence grounding unverified — LLM will assess).');
     }
 
     if (hasGenericFix(finding.suggestedFix)) {

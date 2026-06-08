@@ -11,12 +11,18 @@ import type { EvidenceLevel, PipelineResult, RejectedEntry } from './types.js';
 import { TruthVerifierStage } from './truth-verifier-stage.js';
 import { Verifier } from './verifier.js';
 
+export interface PipelineOptions {
+  runId?: string;
+  repoRoot?: string;
+}
+
 export const FindingPipeline = {
   async process(
     candidates: CandidateFinding[],
     context: ContextBundle,
     config: Config,
     provider?: Provider,
+    options?: PipelineOptions,
   ): Promise<PipelineResult> {
     const rejected: RejectedEntry[] = [];
     const evidenceLevels = new Map<string, EvidenceLevel>();
@@ -54,7 +60,7 @@ export const FindingPipeline = {
     let verified = schemaVerified;
     let truthVerifierApprovalRate: number | undefined;
     if (provider) {
-      const tvResult = await TruthVerifierStage.run(schemaVerified, context, provider);
+      const tvResult = await TruthVerifierStage.run(schemaVerified, context, provider, options);
       verified = tvResult.candidates;
       truthVerifierApprovalRate = tvResult.truthVerifierApprovalRate;
     }

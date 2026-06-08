@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { FeedbackStore, MetricsCalculator } from '@engagement-harness/feedback';
+import type { VerifierRunMetrics } from '@engagement-harness/pipeline';
 import chalk from 'chalk';
 
 export interface FeedbackPilotReportOptions {
@@ -68,5 +72,53 @@ export async function feedbackPilotReportCommand(
     }
     console.log(chalk.yellow(`   Action: ${alert.recommendation}`));
     console.log('');
+  }
+
+  // Verifier performance metrics (last N days)
+  const metricsPath = join(process.cwd(), '.engagement-harness/feedback/verifier-metrics.json');
+  if (existsSync(metricsPath)) {
+    try {
+      const allMetrics = JSON.parse(readFileSync(metricsPath, 'utf8')) as VerifierRunMetrics[];
+      const cutoffMs = Date.now() - days * 24 * 60 * 60 * 1000;
+      const recentMetrics = allMetrics.filter((m) => {
+        const t = Date.parse(m.timestamp);
+        return Number.isFinite(t) ? t >= cutoffMs : true;
+      });
+
+      if (recentMetrics.length > 0) {
+        const sum = (field: keyof VerifierRunMetrics) =>
+          recentMetrics.reduce((acc, m) => acc + (Number(m[field]) || 0), 0);
+        const avgField = (field: keyof VerifierRunMetrics) =>
+          recentMetrics.reduce((acc, m) => acc + (Number(m[field]) || 0), 0) / recentMetrics.length;
+
+        const totalEval = sum('totalEvaluated');
+        const layer0 = sum('layer0Rejected');
+        const llmPub = sum('llmPublished');
+        const llmRej = sum('llmRejected');
+        const ncPub = sum('needsContextPublished');
+        const ncRej = sum('needsContextRejected');
+        const lcOverrides = sum('lowConfidenceRejections');
+        const fpMatches = sum('fpPatternMatches');
+        const avgConfPub = avgField('avgConfidencePublished');
+        const avgConfRej = avgField('avgConfidenceRejected');
+
+        const pct1 = (n: number, d: number) => (d > 0 ? `(${Math.round((n / d) * 100)}%)` : '');
+
+        console.log(chalk.bold(`🔍 Verifier Performance (last ${days} days, ${recentMetrics.length} runs):`));
+        console.log(`   Total evaluated:          ${totalEval}`);
+        console.log(`   Layer 0 rejected:         ${layer0} ${pct1(layer0, totalEval)}  ← hallucinated evidence`);
+        console.log(`   LLM published:            ${llmPub} ${pct1(llmPub, totalEval)}`);
+        console.log(`   LLM rejected:             ${llmRej} ${pct1(llmRej, totalEval)}`);
+        console.log(`   needs_context published:  ${ncPub} ${pct1(ncPub, totalEval)}  ← would have been lost before`);
+        console.log(`   needs_context rejected:   ${ncRej} ${pct1(ncRej, totalEval)}`);
+        console.log(`   Low-confidence overrides: ${lcOverrides} ${pct1(lcOverrides, totalEval)}  ← would have been lost before`);
+        console.log(`   FP pattern matches:       ${fpMatches} ${pct1(fpMatches, totalEval)}`);
+        console.log(`   Avg confidence published: ${avgConfPub.toFixed(2)}`);
+        console.log(`   Avg confidence rejected:  ${avgConfRej.toFixed(2)}`);
+        console.log('');
+      }
+    } catch {
+      // non-critical — skip if metrics file is malformed
+    }
   }
 }

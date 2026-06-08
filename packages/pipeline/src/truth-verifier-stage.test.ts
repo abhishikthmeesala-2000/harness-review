@@ -94,11 +94,21 @@ describe('TruthVerifierStage.run', () => {
     expect(candidates[0]!.verification.reason).toContain('downgraded to medium');
   });
 
-  it('rejects a finding when verdict is needs_context', async () => {
+  it('publishes high-severity finding when verdict is needs_context (Change 2)', async () => {
     const provider = makeProvider([
       { findingId: 'EH-0001', decision: 'needs_context', finalSeverity: 'high', confidence: 0.7, reason: 'Need to see the middleware.', failureType: 'needs_more_context' },
     ]);
     const { candidates } = await TruthVerifierStage.run([makeCandidate()], makeBundle(), provider);
+
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('needs manual review');
+  });
+
+  it('suppresses medium-severity finding when verdict is needs_context', async () => {
+    const provider = makeProvider([
+      { findingId: 'EH-0001', decision: 'needs_context', finalSeverity: 'medium', confidence: 0.7, reason: 'Need to see the middleware.', failureType: 'needs_more_context' },
+    ]);
+    const { candidates } = await TruthVerifierStage.run([makeCandidate({ severity: 'medium' })], makeBundle(), provider);
 
     expect(candidates[0]!.verification.status).toBe('rejected');
     expect(candidates[0]!.verification.reason).toContain('needs_context');
@@ -233,6 +243,128 @@ describe('TruthVerifierStage.run', () => {
     const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
 
     expect(candidates[0]!.verification.status).toBe('rejected');
+  });
+
+  it('treats low-confidence rejected finding as needs_context (Change 1)', async () => {
+    const provider = makeProvider([
+      {
+        findingId: 'EH-0001',
+        decision: 'rejected',
+        finalSeverity: 'medium',
+        confidence: 0.50,
+        reason: 'I am not sure about this.',
+        failureType: 'unsupported_claim',
+        claimAddressed: true,
+      },
+    ]);
+    const candidate = makeCandidate({ severity: 'medium' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    // Medium + needs_context → rejected, but through the needs_context path
+    expect(candidates[0]!.verification.status).toBe('rejected');
+    expect(candidates[0]!.verification.reason).toContain('needs_context');
+  });
+
+  it('publishes high-severity finding via low-confidence rejection path (existing override still fires first)', async () => {
+    const provider = makeProvider([
+      {
+        findingId: 'EH-0001',
+        decision: 'rejected',
+        finalSeverity: 'high',
+        confidence: 0.50,
+        reason: 'Looks fine to me.',
+        failureType: 'unsupported_claim',
+        claimAddressed: true,
+      },
+    ]);
+    const candidate = makeCandidate({ severity: 'high' });
+    const { candidates } = await TruthVerifierStage.run([candidate], makeBundle(), provider);
+
+    // High + rejected + confidence < 0.7 hits the existing override before Change 1
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('high severity with low-confidence rejection');
+  });
+
+  it('layer 0 rejects finding when evidence is not found in file content', async () => {
+    const bundle = makeBundle();
+    bundle.entries = [
+      {
+        kind: 'changed-file' as const,
+        path: 'src/api/users.ts',
+        content: 'const foo = 1;\nconst bar = 2;\n',
+        reason: 'changed',
+        priority: 1,
+      },
+    ];
+    const candidate = makeCandidate({
+      evidence: [{ type: 'diff', content: 'completely hallucinated code that does not exist xyz123abc456' }],
+      severity: 'high',
+    });
+    const provider = makeProvider([]);
+    const { candidates } = await TruthVerifierStage.run([candidate], bundle, provider);
+
+    expect(candidates[0]!.verification.status).toBe('rejected');
+    expect(candidates[0]!.verification.reason).toContain('layer-0');
+    expect(provider.complete).not.toHaveBeenCalled();
+  });
+
+  it('layer 0 passes finding when evidence exists in file content', async () => {
+    const bundle = makeBundle();
+    bundle.entries = [
+      {
+        kind: 'changed-file' as const,
+        path: 'src/api/users.ts',
+        content: 'const query = `SELECT * FROM users WHERE id=${id}`;\nsome code',
+        reason: 'changed',
+        priority: 1,
+      },
+    ];
+    const candidate = makeCandidate({
+      evidence: [{ type: 'diff', content: 'SELECT * FROM users WHERE id=${id}' }],
+    });
+    const provider = makeProvider([
+      { findingId: 'EH-0001', decision: 'approved', finalSeverity: 'high', confidence: 0.9, reason: 'Proven.', failureType: 'none' },
+    ]);
+    const { candidates } = await TruthVerifierStage.run([candidate], bundle, provider);
+
+    expect(provider.complete).toHaveBeenCalled();
+    expect(candidates[0]!.verification.status).toBe('approved');
+  });
+
+  it('layer 0 always passes critical findings to LLM despite weak evidence', async () => {
+    const bundle = makeBundle();
+    bundle.entries = [
+      {
+        kind: 'changed-file' as const,
+        path: 'src/api/users.ts',
+        content: 'const foo = 1;\n',
+        reason: 'changed',
+        priority: 1,
+      },
+    ];
+    // Critical findings bypass layer 0 entirely (they also bypass LLM via the critical auto-approve path)
+    const candidate = makeCandidate({
+      severity: 'critical',
+      evidence: [{ type: 'diff', content: 'hallucinated evidence that does not exist abcxyz' }],
+    });
+    const provider = makeProvider([]);
+    const { candidates } = await TruthVerifierStage.run([candidate], bundle, provider);
+
+    // Critical always published — never layer 0 rejected
+    expect(candidates[0]!.verification.status).toBe('approved');
+    expect(candidates[0]!.verification.reason).toContain('critical severity');
+  });
+
+  it('verifierMetrics are returned in the result', async () => {
+    const provider = makeProvider([
+      { findingId: 'EH-0001', decision: 'approved', finalSeverity: 'high', confidence: 0.9, reason: 'Proven.', failureType: 'none' },
+    ]);
+    const { verifierMetrics } = await TruthVerifierStage.run([makeCandidate()], makeBundle(), provider);
+
+    expect(verifierMetrics).toBeDefined();
+    expect(verifierMetrics!.totalEvaluated).toBe(1);
+    expect(verifierMetrics!.llmPublished).toBe(1);
+    expect(verifierMetrics!.llmRejected).toBe(0);
   });
 
   it('counts critical findings in approval rate', async () => {

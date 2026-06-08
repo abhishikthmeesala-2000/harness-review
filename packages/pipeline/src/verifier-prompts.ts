@@ -156,11 +156,32 @@ TO ACCEPT — show the problem is real:
   - How much slower (O(n) vs O(n²) etc)
 `;
 
+    case 'quality':
+      return `
+CLAIM TYPE: CODE QUALITY / MAINTAINABILITY
+You must determine if this is a real quality concern with measurable impact.
+
+TO REJECT — show the concern is not actionable:
+  - Pattern is consistent throughout the codebase (not a local anomaly)
+  - Concern is purely stylistic with no correctness or safety risk
+  - Finding is already covered by another finding in this batch
+
+TO ACCEPT — show the concern has real impact:
+  - Reduces correctness or creates a subtle bug risk
+  - Introduces technical debt that is measurable (harder to change, likely to break)
+  - Violates a pattern that is consistently followed everywhere else
+`;
+
     default:
       return `
-Determine if this finding is accurate and actionable.
-Reject only if clearly wrong or irrelevant.
-Accept if there is reasonable doubt.
+CLAIM TYPE: UNCLEAR — first determine the actual claim type by reading
+category, dimension, title, and evidence. Then apply the evaluation
+criteria for the closest matching claim type above (bug, security,
+missing-test, intent-gap, architecture, or performance).
+
+If still unclear after reading the evidence:
+  - Accept if evidence is specific, code-grounded, and impact is real
+  - Reject only if evidence is absent, vague, or impact is purely speculative
 `;
   }
 }
