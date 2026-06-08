@@ -377,6 +377,8 @@ const SAFE_TESTING_SIGNALS: RegExp[] = [
   /\bit\s*\(/i,
   /\btest\s*\(/i,
   /\bexpect\s*\(/i,
+  // React/JSX imports indicate a UI component — not business logic requiring unit tests.
+  /from\s+['"]react['"]/i,
 ];
 
 function shouldSuppressFixture(dimension: string, addedLines: string[]): boolean {
