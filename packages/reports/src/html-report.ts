@@ -3,6 +3,64 @@ import type { PipelineResult } from '@engagement-harness/pipeline';
 
 import type { RunMetadata } from './types.js';
 
+// Local shape — mirrors RemediationOutput from @engagement-harness/agents
+// without creating a cross-package dependency in reports.
+interface RemediationOutputLike {
+  findingId: string;
+  file: string;
+  lineStart: number;
+  lineEnd: number;
+  before: string;
+  after: string;
+  explanation: string;
+  test: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  effort: 'minutes' | 'hours' | 'days';
+}
+
+const RISK_COLOR: Record<string, string> = {
+  low: '#16a34a',
+  medium: '#ca8a04',
+  high: '#dc2626',
+};
+
+function renderRemediationSection(remediations: Record<string, RemediationOutputLike>): string {
+  const items = Object.values(remediations);
+  if (items.length === 0) return '';
+  return `
+  <h2>Fixes</h2>
+  ${items
+    .map(
+      (o) => `
+  <div style="margin-bottom:2rem;border:1px solid #e2e8f0;border-radius:6px;overflow:hidden">
+    <div style="background:#f8fafc;padding:0.75rem 1rem;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:1rem">
+      <strong>🔧 Fix for ${esc(o.findingId)}</strong>
+      <span style="color:${RISK_COLOR[o.riskLevel] ?? '#64748b'};font-weight:600">${esc(o.riskLevel.toUpperCase())} RISK</span>
+      <span style="color:#64748b">⏱ ${esc(o.effort)}</span>
+      <span style="color:#64748b;font-size:0.875rem">${esc(o.file)}:${o.lineStart}–${o.lineEnd}</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr">
+      <div style="padding:1rem;background:#fee2e2;border-right:1px solid #fca5a5">
+        <div style="font-size:0.75rem;font-weight:600;color:#991b1b;margin-bottom:0.5rem">BEFORE</div>
+        <pre style="margin:0;font-size:0.8rem;white-space:pre-wrap;word-break:break-all">${esc(o.before)}</pre>
+      </div>
+      <div style="padding:1rem;background:#dcfce7">
+        <div style="font-size:0.75rem;font-weight:600;color:#166534;margin-bottom:0.5rem">AFTER</div>
+        <pre style="margin:0;font-size:0.8rem;white-space:pre-wrap;word-break:break-all">${esc(o.after)}</pre>
+      </div>
+    </div>
+    <div style="padding:0.75rem 1rem;border-top:1px solid #e2e8f0">
+      <p style="margin:0 0 0.5rem"><strong>Explanation:</strong> ${esc(o.explanation)}</p>
+      <details>
+        <summary style="cursor:pointer;color:#475569">Test to add</summary>
+        <pre style="margin:0.5rem 0 0;background:#f1f5f9;padding:0.75rem;border-radius:4px;font-size:0.8rem;white-space:pre-wrap">${esc(o.test)}</pre>
+      </details>
+    </div>
+  </div>`,
+    )
+    .join('\n')}`;
+}
+
 const SEVERITY_COLOR: Record<string, string> = {
   critical: '#dc2626',
   high: '#ea580c',
@@ -56,7 +114,11 @@ function renderFinding(f: Finding): string {
 }
 
 export const HtmlReport = {
-  generate(result: PipelineResult, meta: RunMetadata): string {
+  generate(
+    result: PipelineResult,
+    meta: RunMetadata,
+    remediations?: Record<string, RemediationOutputLike>,
+  ): string {
     const { published, rejected, decision, overallConfidence, metrics } = result;
 
     const byDimension = new Map<string, Finding[]>();
@@ -124,6 +186,8 @@ export const HtmlReport = {
 
   <h2>Findings by Dimension</h2>
   ${published.length === 0 ? '<p><em>No findings published.</em></p>' : dimensionsHtml}
+
+  ${remediations && Object.keys(remediations).length > 0 ? renderRemediationSection(remediations) : ''}
 
   <h2>Quality Summary</h2>
   <h3 style="font-size:1rem">Rejected by Stage</h3>

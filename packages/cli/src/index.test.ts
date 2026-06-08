@@ -138,14 +138,14 @@ describe('command stubs', () => {
     expect(result.exitCode).toBe(1);
   });
 
-  it('remediate exits 1 when --finding is missing', async () => {
-    const result = await invoke(['remediate']);
-    expect(result.stderr).toContain('--finding');
-    expect(result.exitCode).toBe(1);
+  it('remediate list exits 0 with no findings message when no review has run', async () => {
+    const result = await invoke(['remediate', 'list']);
+    expect(result.stdout).toContain('No findings found');
+    expect(result.exitCode).toBe(0);
   });
 
-  it('remediate --finding exits 1 when no config is present', async () => {
-    const result = await invoke(['remediate', '--finding', 'EH-0001']);
+  it('remediate apply exits 1 when no config is present', async () => {
+    const result = await invoke(['remediate', 'apply', 'EH-0001']);
     expect(result.stderr).toContain('No config found');
     expect(result.exitCode).toBe(1);
   });

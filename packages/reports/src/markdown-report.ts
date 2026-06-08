@@ -3,6 +3,21 @@ import type { PipelineResult } from '@engagement-harness/pipeline';
 
 import type { RunMetadata } from './types.js';
 
+// Local shape — mirrors RemediationOutput from @engagement-harness/agents
+// without creating a cross-package dependency in reports.
+interface RemediationOutputLike {
+  findingId: string;
+  file: string;
+  lineStart: number;
+  lineEnd: number;
+  before: string;
+  after: string;
+  explanation: string;
+  test: string;
+  riskLevel: 'low' | 'medium' | 'high';
+  effort: 'minutes' | 'hours' | 'days';
+}
+
 const SEVERITY_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
 const SEVERITY_BADGE: Record<string, string> = {
@@ -20,7 +35,11 @@ const DECISION_LABEL: Record<string, string> = {
 };
 
 export const MarkdownReport = {
-  generate(result: PipelineResult, meta: RunMetadata): string {
+  generate(
+    result: PipelineResult,
+    meta: RunMetadata,
+    remediations?: Record<string, RemediationOutputLike>,
+  ): string {
     const lines: string[] = [];
     const { published, decision, overallConfidence, metrics } = result;
 
@@ -77,6 +96,47 @@ export const MarkdownReport = {
           lines.push('---');
           lines.push('');
         }
+      }
+    }
+
+    if (remediations && Object.keys(remediations).length > 0) {
+      lines.push('## Fixes');
+      lines.push('');
+      for (const output of Object.values(remediations)) {
+        const riskEmoji =
+          output.riskLevel === 'low' ? '🟢' : output.riskLevel === 'medium' ? '🟡' : '🔴';
+        const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+        lines.push(`### 🔧 Fix for ${output.findingId}`);
+        lines.push('');
+        lines.push(
+          `**Risk:** ${riskEmoji} ${capitalise(output.riskLevel)} · **Effort:** ⏱ ${capitalise(output.effort)}`,
+        );
+        lines.push('');
+        lines.push(`**File:** \`${output.file}:${output.lineStart}–${output.lineEnd}\``);
+        lines.push('');
+        lines.push('**Before:**');
+        lines.push('```diff');
+        for (const line of output.before.split('\n')) {
+          lines.push(`- ${line}`);
+        }
+        lines.push('```');
+        lines.push('');
+        lines.push('**After:**');
+        lines.push('```diff');
+        for (const line of output.after.split('\n')) {
+          lines.push(`+ ${line}`);
+        }
+        lines.push('```');
+        lines.push('');
+        lines.push(`**Explanation:** ${output.explanation}`);
+        lines.push('');
+        lines.push('**Test to add:**');
+        lines.push('```typescript');
+        lines.push(output.test);
+        lines.push('```');
+        lines.push('');
+        lines.push('---');
+        lines.push('');
       }
     }
 

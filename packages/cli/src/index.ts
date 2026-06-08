@@ -18,7 +18,13 @@ import { initCommand, type InitOptions } from './commands/init.js';
 import { uninitCommand, type UninitOptions } from './commands/uninit.js';
 import { modelsListCommand } from './commands/models-list.js';
 import { modelsValidateCommand } from './commands/models-validate.js';
-import { remediateCommand, type RemediateOptions } from './commands/remediate.js';
+import {
+  remediateListCommand,
+  remediateApplyCommand,
+  remediateAutoFixCommand,
+  type ApplyOptions,
+  type AutoFixOptions,
+} from './commands/remediate.js';
 import { reportLatestCommand, reportListCommand, reportRunCommand } from './commands/report.js';
 import { reviewCommand, type ReviewOptions } from './commands/review.js';
 
@@ -172,12 +178,32 @@ export function buildProgram(): Command {
       await feedbackPilotReportCommand(options);
     });
 
-  program
+  const remediate = program
     .command('remediate')
-    .description('Generate a remediation plan for a finding')
-    .option('--finding <id>', 'finding id (e.g. EH-0001)')
-    .action(async (options: RemediateOptions) => {
-      await remediateCommand(options);
+    .description('Apply AI-generated code patches to findings');
+
+  remediate
+    .command('list')
+    .description('Show findings and available patches')
+    .action(async () => {
+      await remediateListCommand();
+    });
+
+  remediate
+    .command('apply <findingId>')
+    .description('Apply patch for a specific finding')
+    .option('--yes', 'skip confirmation prompt')
+    .action(async (findingId: string, options: ApplyOptions) => {
+      await remediateApplyCommand(findingId, options);
+    });
+
+  remediate
+    .command('auto-fix')
+    .description('Apply all patches at or below a risk level and commit')
+    .option('--risk <level>', 'risk ceiling: low | medium | high', 'low')
+    .option('--yes', 'skip confirmation prompt')
+    .action(async (options: AutoFixOptions) => {
+      await remediateAutoFixCommand(options);
     });
 
   return program;

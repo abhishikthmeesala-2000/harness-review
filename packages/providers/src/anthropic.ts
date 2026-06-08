@@ -57,7 +57,7 @@ export class AnthropicProvider implements Provider {
     // Extended thinking must not include temperature at all — the API rejects requests
     // that include temperature alongside the thinking parameter.
     if (!useThinking) {
-      body['temperature'] = options?.temperature ?? (this.config as any).temperature ?? 0.1;
+      body['temperature'] = options?.temperature ?? this.config.temperature ?? 0.1;
     }
     if (options?.system) body.system = options.system;
     if (useThinking) {
