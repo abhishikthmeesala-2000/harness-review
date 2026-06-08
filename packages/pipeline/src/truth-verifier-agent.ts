@@ -110,6 +110,14 @@ Examples of claimAddressed=false:
 
 claimAddressed=false means the finding will be published regardless of your rejection decision.
 
+Before setting claimAddressed=true on any rejection, apply this per-claim-type checklist:
+  BUG rejection: "Does my reason prove the code logic is correct for the exact scenario described?" If no → claimAddressed=false
+  SECURITY rejection: "Does my reason name a specific mitigation present in the code (validation, parameterization, sanitization, trusted source)?" If no → claimAddressed=false
+  MISSING-TEST rejection: "Did I name the specific test file AND specific test case that covers this code?" If no → claimAddressed=false
+  INTENT-GAP rejection: "Did I cite the specific diff line(s) that implement the PR claim?" If no → claimAddressed=false
+  ARCHITECTURE rejection: "Did I show the pattern is consistent with the rest of the codebase OR cite documentation for the exception?" If no → claimAddressed=false
+  PERFORMANCE rejection: "Did I show the data size bound or call frequency that makes this acceptable?" If no → claimAddressed=false
+
 Return ONLY a JSON object, no markdown fences:
 {
   "verdicts": [
@@ -124,6 +132,8 @@ Return ONLY a JSON object, no markdown fences:
     }
   ]
 }`;
+
+const FOCUSED_DIFF_WINDOW = 30;
 
 function renderDiff(context: ContextBundle): string {
   if (context.diff.length === 0) return '(no diff)';
@@ -160,14 +170,72 @@ function renderContextEntries(context: ContextBundle): string {
   return sections.join('\n');
 }
 
+function sliceFindingContext(
+  finding: CandidateFinding,
+  context: ContextBundle,
+): { focusedDiff: string; relatedEntries: string } {
+  // Focused diff: only hunks from finding.file that overlap with [lineStart±WINDOW]
+  const fileDiff = context.diff.find((f) => f.path === finding.file);
+  let focusedDiff = '(no diff for this file)';
+
+  if (fileDiff) {
+    const lines: string[] = [`--- ${fileDiff.path}`];
+    for (const hunk of fileDiff.hunks) {
+      const hunkEnd = hunk.newStart + hunk.newLines;
+      const inWindow =
+        hunkEnd >= finding.lineStart - FOCUSED_DIFF_WINDOW &&
+        hunk.newStart <= finding.lineEnd + FOCUSED_DIFF_WINDOW;
+      if (inWindow) {
+        for (const line of hunk.lines) {
+          const prefix = line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' ';
+          lines.push(`${prefix}${line.content}`);
+        }
+      }
+    }
+    if (lines.length > 1) focusedDiff = lines.join('\n');
+  }
+
+  // Related context entries: those referencing this file or appearing in the evidence
+  const evidenceText = finding.evidence.map((e) => e.content).join(' ');
+  const findingDir = finding.file.split('/').slice(0, -1).join('/');
+
+  const related = context.entries.filter(
+    (e) =>
+      e.path === finding.file ||
+      evidenceText.includes(e.path) ||
+      (e.kind === 'test' && findingDir !== '' && e.path.includes(findingDir)),
+  );
+
+  const relatedEntries =
+    related.length > 0
+      ? related.map((e) => `--- ${e.path} ---\n${e.content.slice(0, 2000)}`).join('\n')
+      : '(no related context files)';
+
+  return { focusedDiff, relatedEntries };
+}
+
 function buildClaimTypeContext(findings: CandidateFinding[], context: ContextBundle): string {
   const sections: string[] = [];
   for (const f of findings) {
     const claimType = detectClaimType(f);
     const instructions = getClaimTypeInstructions(claimType, context.entries);
-    sections.push(`=== Finding ${f.id} (${f.title}) ===\nCLAIM TYPE: ${claimType}\n${instructions}`);
+    const { focusedDiff, relatedEntries } = sliceFindingContext(f, context);
+
+    sections.push(
+      [
+        `=== Finding ${f.id} (${f.title}) ===`,
+        `CLAIM TYPE: ${claimType}`,
+        instructions,
+        '',
+        `FOCUSED DIFF (${f.file}, lines ${f.lineStart}-${f.lineEnd} ±${FOCUSED_DIFF_WINDOW}):`,
+        focusedDiff,
+        '',
+        'RELATED CONTEXT (test files, imports):',
+        relatedEntries,
+      ].join('\n'),
+    );
   }
-  return sections.join('\n');
+  return sections.join('\n\n');
 }
 
 function buildPrompt(findings: CandidateFinding[], context: ContextBundle): string {
@@ -193,13 +261,13 @@ function buildPrompt(findings: CandidateFinding[], context: ContextBundle): stri
     'FINDINGS TO VERIFY',
     JSON.stringify(findingsSummary, null, 2),
     '',
-    'CLAIM-TYPE-SPECIFIC EVALUATION RULES',
+    'CLAIM-TYPE-SPECIFIC EVALUATION AND FOCUSED CONTEXT PER FINDING',
     buildClaimTypeContext(findings, context),
     '',
-    'DIFF',
+    'FULL DIFF (all changed files, for cross-file reference)',
     renderDiff(context),
     '',
-    'FULL CONTEXT (changed files, tests, imports, rules)',
+    'FULL CONTEXT (all changed files, tests, imports, rules)',
     renderContextEntries(context),
   ].join('\n');
 }

@@ -89,13 +89,14 @@ describe('Verifier.verify', () => {
     expect(result.verification.reason).toMatch(/evidence/i);
   });
 
-  it('rejects when no diff evidence item content appears in the diff', () => {
+  it('passes through finding with paraphrased diff evidence (grounding check is advisory, not hard-reject)', () => {
     const finding = makeCandidate({
       evidence: [{ type: 'diff', content: 'completely unrelated text xyz123' }],
     });
     const result = Verifier.verify(finding, makeBundle());
-    expect(result.verification.status).toBe('rejected');
-    expect(result.verification.reason).toMatch(/evidence.*diff|diff.*evidence/i);
+    // Heuristic verifier no longer hard-rejects paraphrased evidence — LLM assesses grounding
+    expect(result.verification.status).toBe('approved');
+    expect(result.verification.reason).toContain('LLM will assess');
   });
 
   it('rejects generic suggestedFix: "consider refactoring"', () => {

@@ -5,6 +5,7 @@ import {
   MetricsCalculator,
   ReactionCollector,
 } from '@engagement-harness/feedback';
+import { FpPatternStore } from '@engagement-harness/pipeline';
 import chalk from 'chalk';
 import { getRemoteUrl } from '../utils/git.js';
 
@@ -89,6 +90,18 @@ export async function feedbackCollectCommand(options: FeedbackCollectOptions): P
   const calculator = new MetricsCalculator();
   const metrics = calculator.calculate(merged);
   store.saveMetrics(metrics);
+
+  // Learn FP patterns from false_positive reactions
+  const fpStore = new FpPatternStore(process.cwd());
+  for (const item of result.collected) {
+    if (item.state === 'false_positive') {
+      fpStore.learnFromFalsePositive({
+        sourceAgent: item.metadata?.sourceAgent,
+        category: item.metadata?.dimension,
+        timestamp: item.timestamp,
+      });
+    }
+  }
 
   const counts: Record<string, number> = {};
   for (const item of result.collected) {
